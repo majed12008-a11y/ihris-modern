@@ -1,0 +1,47 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: ihris-postgres
+    environment:
+      POSTGRES_USER: ihris
+      POSTGRES_PASSWORD: ihris_password
+      POSTGRES_DB: ihris_manage
+    ports:
+      - "5432:5432"
+    volumes:
+      - ihris_pg_data:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ihris-backend
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: "postgresql://ihris:ihris_password@postgres:5432/ihris_manage"
+      JWT_SECRET: "ihris-change-me-in-production-secret"
+      PORT: 5000
+      NODE_ENV: production
+      CORS_ORIGIN: "http://localhost:5173"
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ihris-frontend
+    depends_on:
+      - backend
+    environment:
+      VITE_API_URL: "http://localhost:5000/api"
+    ports:
+      - "5173:80"
+    restart: unless-stopped
+
+volumes:
+  ihris_pg_data:

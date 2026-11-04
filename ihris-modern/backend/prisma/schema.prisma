@@ -1,0 +1,816 @@
+// Prisma Schema for iHRIS Suite Modern (PostgreSQL)
+// Converted from legacy MySQL iHRIS Manage (i2ce framework)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// المستخدمين والصلاحيات (Users & RBAC)
+// ============================================
+
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique @db.VarChar(30)
+  password  String   @db.VarChar(255)
+  firstname String   @db.VarChar(255)
+  lastname  String   @db.VarChar(255)
+  email     String   @unique @db.VarChar(255)
+  creatorId Int?     @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  access    UserAccess[]
+  person    Person?  @relation(fields: [personId], references: [id])
+  personId  Int?     @unique
+
+  @@map("users")
+}
+
+model Role {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(50)
+  displayName String @db.VarChar(100)
+  description String? @db.Text
+  createdAt DateTime @default(now())
+
+  userAccess UserAccess[]
+  permissions Permission[]
+
+  @@map("roles")
+}
+
+model UserAccess {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  roleId    Int
+  grantedAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId], name: "userId_roleId")
+  @@map("user_access")
+}
+
+model Permission {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(100)
+  description String?  @db.Text
+  roleId      Int
+  createdAt   DateTime @default(now())
+
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@map("permissions")
+}
+
+// ============================================
+// الكيانات الأساسية (Core HR Entities)
+// ============================================
+
+model Person {
+  id              Int       @id @default(autoincrement())
+  surname         String    @db.VarChar(255)
+  firstname       String    @db.VarChar(255)
+  othername       String?   @db.VarChar(255)
+  nationalityId   Int?
+  countryId       Int?
+  districtId      Int?
+  countyId        Int?
+  residenceCountryId Int?
+  residenceDistrictId Int?
+  residenceCountyId Int?
+  password        String?   @db.VarChar(255)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user            User?
+  country         Country?   @relation(fields: [countryId], references: [id])
+  district        District?  @relation(fields: [districtId], references: [id])
+  county          County?    @relation(fields: [countyId], references: [id])
+  contacts        Contact[]
+  demographics    Demographic[]
+  ids             PersonId[]
+  languages       PersonLanguage[]
+  positions       PersonPosition[]
+  competencies    PersonCompetency[]
+  scheduledTrainings PersonScheduledTraining[]
+  notes           Note[]
+  employments     Employment[]
+  educations      Education[]
+  benefits        Benefit[]
+  applications    Application[]
+  salaries        Salary[]
+
+  @@map("people")
+}
+
+model Position {
+  id              Int       @id @default(autoincrement())
+  code            String?   @db.VarChar(50)
+  jobId           Int?
+  title           String?   @db.VarChar(255)
+  description     String?   @db.Text
+  proposedSalary  String?   @db.VarChar(100)
+  source          String?   @db.VarChar(100)
+  supervisorId    Int?
+  facilityId      Int?
+  departmentId    Int?
+  posTypeId       Int?
+  proposedEndDate DateTime?
+  proposedHiringDate DateTime?
+  statusId        Int?
+  postedDate      DateTime?
+  comments        String?   @db.Text
+  interviewComments String? @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  job             Job?      @relation(fields: [jobId], references: [id])
+  facility        Facility? @relation(fields: [facilityId], references: [id])
+  department      Department? @relation(fields: [departmentId], references: [id])
+  posType         JobType? @relation(fields: [posTypeId], references: [id])
+  status          PositionStatus? @relation(fields: [statusId], references: [id])
+  personPositions PersonPosition[]
+  decisions       PositionDecision[]
+  interviews      PositionInterview[]
+
+  @@map("positions")
+}
+
+model Job {
+  id              Int       @id @default(autoincrement())
+  title           String    @db.VarChar(255)
+  code            String?   @db.VarChar(50)
+  description     String?   @db.Text
+  salaryGradeId   Int?
+  cadreId         Int?
+  classificationId Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  positions       Position[]
+  salaryGrade     SalaryGrade? @relation(fields: [salaryGradeId], references: [id])
+  cadre           Cadre?    @relation(fields: [cadreId], references: [id])
+  classification  Classification? @relation(fields: [classificationId], references: [id])
+
+  @@map("jobs")
+}
+
+model Facility {
+  id          Int       @id @default(autoincrement())
+  name        String    @db.VarChar(255)
+  facilityTypeId Int?
+  districtId  Int?
+  countyId    Int?
+  countryId   Int?
+  regionId    Int?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  positions   Position[]
+  facilityType FacilityType? @relation(fields: [facilityTypeId], references: [id])
+  district    District?   @relation(fields: [districtId], references: [id])
+  county      County?     @relation(fields: [countyId], references: [id])
+  country     Country?    @relation(fields: [countryId], references: [id])
+  region      Region?     @relation(fields: [regionId], references: [id])
+
+  @@map("facilities")
+}
+
+model Salary {
+  id          Int       @id @default(autoincrement())
+  personId    Int
+  startDate   DateTime
+  endDate     DateTime?
+  salary      String    @db.VarChar(100)
+  notes       String?   @db.Text
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@map("salaries")
+}
+
+// ============================================
+// جداول المراجع / القواميس (Reference / Lookup Tables)
+// ============================================
+
+model Country {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(100)
+  code      String?  @unique @db.VarChar(10)
+  createdAt DateTime @default(now())
+
+  districts District[]
+  facilities Facility[]
+  people    Person[]
+
+  @@map("countries")
+}
+
+model District {
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(100)
+  countryId Int
+  createdAt DateTime @default(now())
+
+  country   Country  @relation(fields: [countryId], references: [id])
+  counties  County[]
+  facilities Facility[]
+  people    Person[]
+
+  @@map("districts")
+}
+
+model County {
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(100)
+  districtId Int
+  createdAt DateTime @default(now())
+
+  district  District @relation(fields: [districtId], references: [id])
+  facilities Facility[]
+  people    Person[]
+
+  @@map("counties")
+}
+
+model Region {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(100)
+  createdAt DateTime @default(now())
+
+  facilities Facility[]
+
+  @@map("regions")
+}
+
+model JobType {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(100)
+  createdAt DateTime @default(now())
+
+  positions Position[]
+
+  @@map("position_types")
+}
+
+model PositionStatus {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(100)
+  createdAt DateTime @default(now())
+
+  positions Position[]
+
+  @@map("position_statuses")
+}
+
+model SalaryGrade {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(100)
+  createdAt DateTime @default(now())
+
+  jobs Job[]
+
+  @@map("salary_grades")
+}
+
+model Cadre {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(100)
+  createdAt DateTime @default(now())
+
+  jobs Job[]
+
+  @@map("cadres")
+}
+
+model Classification {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(100)
+  description String? @db.Text
+  code      String?  @db.VarChar(50)
+  createdAt DateTime @default(now())
+
+  jobs Job[]
+
+  @@map("classifications")
+}
+
+model FacilityType {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(100)
+  createdAt DateTime @default(now())
+
+  facilities Facility[]
+
+  @@map("facility_types")
+}
+
+model Department {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(255)
+  createdAt DateTime @default(now())
+
+  positions Position[]
+
+  @@map("departments")
+}
+
+// ============================================
+// جداول relation / child tables (Person sub-entities)
+// ============================================
+
+model Contact {
+  id          Int       @id @default(autoincrement())
+  personId    Int
+  contactType String?   @db.VarChar(50)
+  address     String?   @db.Text
+  telephone   String?   @db.VarChar(50)
+  altTelephone String?  @db.VarChar(50)
+  fax         String?   @db.VarChar(50)
+  email       String?   @db.VarChar(255)
+  notes       String?   @db.Text
+  birthDate   DateTime?
+  genderId    Int?
+  maritalStatusId Int?
+  dependents  Int?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@map("contacts")
+}
+
+model Demographic {
+  id            Int       @id @default(autoincrement())
+  personId      Int
+  birthDate     DateTime?
+  genderId      Int?
+  maritalStatusId Int?
+  dependents    Int?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@map("demographics")
+}
+
+model PersonId {
+  id        Int       @id @default(autoincrement())
+  personId  Int
+  idTypeId  Int?
+  idNum     String?   @db.VarChar(100)
+  createdAt DateTime  @default(now())
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  idType IdType? @relation(fields: [idTypeId], references: [id])
+
+  @@map("person_ids")
+}
+
+model IdType {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(100)
+  createdAt DateTime @default(now())
+
+  personIds PersonId[]
+
+  @@map("id_types")
+}
+
+model PersonLanguage {
+  id         Int       @id @default(autoincrement())
+  personId   Int
+  languageId Int?
+  speaking   Int?
+  reading    Int?
+  writing    Int?
+  createdAt  DateTime  @default(now())
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  language Language? @relation(fields: [languageId], references: [id])
+
+  @@map("person_languages")
+}
+
+model Language {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(100)
+  createdAt DateTime @default(now())
+
+  personLanguages PersonLanguage[]
+
+  @@map("languages")
+}
+
+model PersonCompetency {
+  id             Int       @id @default(autoincrement())
+  personId       Int
+  competencyTypeId Int?
+  competencyId   Int?
+  createdAt      DateTime @default(now())
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  competencyType CompetencyType? @relation(fields: [competencyTypeId], references: [id])
+  competency Competency? @relation(fields: [competencyId], references: [id])
+
+  @@map("person_competencies")
+}
+
+model CompetencyType {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(100)
+  createdAt DateTime @default(now())
+
+  competencies Competency[]
+  personCompetencies PersonCompetency[]
+
+  @@map("competency_types")
+}
+
+model Competency {
+  id              Int      @id @default(autoincrement())
+  name            String   @unique @db.VarChar(255)
+  competencyTypeId Int
+  notes           String?  @db.Text
+  createdAt       DateTime @default(now())
+
+  competencyType CompetencyType @relation(fields: [competencyTypeId], references: [id])
+  personCompetencies PersonCompetency[]
+
+  @@map("competencies")
+}
+
+model PersonPosition {
+  id          Int       @id @default(autoincrement())
+  personId    Int
+  positionId  Int
+  startDate   DateTime?
+  endDate     DateTime?
+  reasonId    Int?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  position  Position @relation(fields: [positionId], references: [id], onDelete: Cascade)
+
+  @@unique([personId, positionId, startDate], name: "person_position_unique")
+  @@map("person_positions")
+}
+
+model PositionDecision {
+  id        Int       @id @default(autoincrement())
+  positionId Int
+  decisionDate DateTime
+  offer     Int?
+  comments  String?   @db.Text
+  createdAt DateTime  @default(now())
+
+  position Position @relation(fields: [positionId], references: [id], onDelete: Cascade)
+
+  @@map("position_decisions")
+}
+
+model PositionInterview {
+  id          Int       @id @default(autoincrement())
+  positionId  Int
+  interviewDate DateTime
+  person      String?   @db.VarChar(255)
+  comments    String?   @db.Text
+  createdAt   DateTime  @default(now())
+
+  position Position @relation(fields: [positionId], references: [id], onDelete: Cascade)
+
+  @@map("position_interviews")
+}
+
+model Note {
+  id         Int       @id @default(autoincrement())
+  personId   Int
+  note       String?   @db.Text
+  dateAdded  DateTime?
+  createdAt  DateTime  @default(now())
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@map("notes")
+}
+
+// ============================================
+// Employment, Education, Benefit, Application
+// ============================================
+
+model Employment {
+  id             Int       @id @default(autoincrement())
+  personId       Int
+  companyName    String?   @db.VarChar(255)
+  companyAddress String?   @db.Text
+  companyPhone   String?   @db.VarChar(50)
+  startDate      DateTime?
+  startWage      Int?
+  startPosition  String?   @db.VarChar(255)
+  endDate        DateTime?
+  endWage        Int?
+  endPosition    String?   @db.VarChar(255)
+  supervisor     String?   @db.VarChar(255)
+  contactOk      Boolean   @default(false)
+  responsibilities String? @db.Text
+  reasonForLeaving String? @db.Text
+  createdAt      DateTime  @default(now())
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@map("employments")
+}
+
+model Education {
+  id          Int       @id @default(autoincrement())
+  personId    Int
+  eduTypeId   Int?
+  degreeId    Int?
+  institution String?   @db.VarChar(255)
+  location    String?   @db.VarChar(255)
+  year        DateTime?
+  major       String?   @db.VarChar(255)
+  completed   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@map("educations")
+}
+
+model Benefit {
+  id         Int       @id @default(autoincrement())
+  personId   Int
+  typeId     Int?
+  amount     String?   @db.VarChar(100)
+  sourceId   Int?
+  startDate  DateTime?
+  endDate    DateTime?
+  recurrence Int?
+  createdAt  DateTime  @default(now())
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@map("benefits")
+}
+
+model Application {
+  id               Int       @id @default(autoincrement())
+  personId         Int?
+  positionId       Int?
+  felony           Int?
+  felonyCircumstance String? @db.Text
+  otherInfo        String?   @db.Text
+  hear             String?   @db.VarChar(255)
+  startDate        DateTime?
+  desiredWage      String?   @db.VarChar(100)
+  fullTime         Int?
+  hours            String?   @db.VarChar(50)
+  createdAt        DateTime  @default(now())
+
+  person Person? @relation(fields: [personId], references: [id])
+
+  @@map("applications")
+}
+
+// ============================================
+// Training Module
+// ============================================
+
+model TrainingCourse {
+  id                 Int       @id @default(autoincrement())
+  name               String    @db.VarChar(255)
+  topic              String?   @db.Text
+  notes              String?   @db.Text
+  trainingInstitutionId Int?
+  trainingFunder     String?   @db.VarChar(255)
+  continuingEducationCourse String? @db.VarChar(255)
+  trainingCourseStatusId Int?
+  trainingCourseCategoryId Int?
+  competency         String?   @db.VarChar(255)
+  createdAt          DateTime  @default(now())
+
+  trainingInstitution TrainingInstitution? @relation(fields: [trainingInstitutionId], references: [id])
+  trainingCourseStatus TrainingCourseStatus? @relation(fields: [trainingCourseStatusId], references: [id])
+  trainingCourseCategory TrainingCourseCategory? @relation(fields: [trainingCourseCategoryId], references: [id])
+
+  scheduledCourses   ScheduledTrainingCourse[]
+
+  @@map("training_courses")
+}
+
+model TrainingInstitution {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(255)
+  createdAt DateTime @default(now())
+
+  trainingCourses TrainingCourse[]
+
+  @@map("training_institutions")
+}
+
+model TrainingCourseStatus {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(100)
+  createdAt DateTime @default(now())
+
+  trainingCourses TrainingCourse[]
+
+  @@map("training_course_statuses")
+}
+
+model TrainingCourseCategory {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(100)
+  createdAt DateTime @default(now())
+
+  trainingCourses TrainingCourse[]
+
+  @@map("training_course_categories")
+}
+
+model ScheduledTrainingCourse {
+  id              Int       @id @default(autoincrement())
+  trainingCourseId Int
+  site            String?   @db.VarChar(255)
+  numStudents     Int?
+  notes           String?   @db.Text
+  instructors     String?   @db.VarChar(255)
+  startDate       DateTime?
+  endDate         DateTime?
+  countryId       Int?
+  districtId      Int?
+  countyId        Int?
+  createdAt       DateTime  @default(now())
+
+  trainingCourse TrainingCourse @relation(fields: [trainingCourseId], references: [id], onDelete: Cascade)
+  personScheduled PersonScheduledTraining[]
+
+  @@map("scheduled_training_courses")
+}
+
+model PersonScheduledTraining {
+  id                      Int       @id @default(autoincrement())
+  personId                Int
+  scheduledTrainingCourseId Int
+  isRetraining            Boolean   @default(false)
+  completed               Boolean   @default(false)
+  requestDate             DateTime?
+  notes                   String?   @db.Text
+  trainingCourseEvaluationId Int?
+  trainingCourseRequestorId Int?
+  trainingCourseId        Int?
+  createdAt               DateTime  @default(now())
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  scheduledTrainingCourse ScheduledTrainingCourse @relation(fields: [scheduledTrainingCourseId], references: [id], onDelete: Cascade)
+
+  @@map("person_scheduled_training_courses")
+}
+
+// ============================================
+// Dynamic EAV tables (kept for backward compatibility / custom forms)
+// ============================================
+
+model Form {
+  id   Int     @id @default(autoincrement())
+  name String  @unique @db.VarChar(50)
+  type Int     @default(0)
+  fields FormField[]
+  records Record[]
+
+  @@map("forms")
+}
+
+model Field {
+  id   Int     @id @default(autoincrement())
+  name String  @db.VarChar(50)
+  type String @db.VarChar(16)
+  formFields FormField[]
+
+  @@unique([name, type])
+  @@map("fields")
+}
+
+model FormField {
+  id        Int   @id @default(autoincrement())
+  formId    Int
+  fieldId   Int
+  form      Form   @relation(fields: [formId], references: [id], onDelete: Cascade)
+  field     Field  @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  entries   Entry[]
+  lastEntries LastEntry[]
+
+  @@unique([formId, fieldId])
+  @@map("form_fields")
+}
+
+model Record {
+  id            Int      @id @default(autoincrement())
+  lastModified  DateTime @default(now())
+  formId        Int
+  parentId      Int?
+  entries       Entry[]
+
+  form   Form   @relation(fields: [formId], references: [id])
+  parent Record? @relation("RecordParent", fields: [parentId], references: [id])
+  child  Record[] @relation("RecordParent")
+  lastEntries LastEntry[]
+
+  @@map("records")
+}
+
+model Entry {
+  id            Int      @id @default(autoincrement())
+  recordId      Int
+  formFieldId   Int
+  date          DateTime @default(now())
+  who           Int
+  changeType    Int      @default(1)
+  multiple      Int      @default(0)
+  stringValue   String?  @db.VarChar(255)
+  integerValue  Int?
+  textValue     String?  @db.Text
+  dateValue     DateTime?
+  blobValue     Bytes?
+
+  record   Record   @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  formField FormField @relation(fields: [formFieldId], references: [id])
+
+  @@index([recordId])
+  @@index([formFieldId])
+  @@map("entries")
+}
+
+model LastEntry {
+  recordId    Int
+  formFieldId Int
+  date        DateTime
+  who         Int
+  changeType  Int
+  multiple    Int
+  stringValue String?  @db.VarChar(255)
+  integerValue Int?
+  textValue   String?  @db.Text
+  dateValue   DateTime?
+  blobValue   Bytes?
+
+  record   Record   @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  formField FormField @relation(fields: [formFieldId], references: [id])
+
+  @@id([recordId, formFieldId])
+  @@map("last_entries")
+}
+
+model DeletedRecord {
+  id           Int      @id @default(autoincrement())
+  lastModified DateTime
+  formId       Int
+  parentId     Int?
+
+  @@map("deleted_records")
+}
+
+// ============================================
+// Config (system settings stored in DB)
+// ============================================
+
+model Config {
+  id        Int      @id @default(autoincrement())
+  hash      String   @unique @db.Char(32)
+  path      String   @db.Text
+  type      Int
+  value     String?  @db.VarChar(2000)
+  children  String?  @db.Text
+  createdAt DateTime @default(now())
+
+  @@map("config")
+}
+
+// ============================================
+// Custom Reports
+// ============================================
+
+model Report {
+  id        Int      @id @default(autoincrement())
+  type      String   @db.VarChar(50)
+  report    String   @db.VarChar(50)
+  cached    DateTime
+  status    Boolean  @default(false)
+
+  @@unique([type, report])
+  @@map("reports")
+}
