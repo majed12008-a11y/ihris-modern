@@ -206,3 +206,132 @@
 **السبب:** الخيار C يوفر توازناً جيداً بين المرونة والأداء والأمان، ويتماشى مع نمط EAV الموجود في النظام الحديث، والجهد المقدر (3-4 أسابيع) يتوافق مع مدة Sprint 1.
 
 **الخطوة التالية:** الانتقال إلى المرحلة 3 (التنفيذ)
+
+---
+
+## ADR-003: سياسة إدارة المستخدمين (User Management Policy)
+
+### 3.1 الحالة
+
+**مقبول وملزم — قرار بشري ثابت، لا يُعاد الاجتهاد فيه.**
+
+> نطاق التنفيذ: هذه السياسة تحكم GAP-002 (تعديل مستخدم) وGAP-003 (حذف مستخدم).
+> لم يُنفَّذ أي كود لإدارة المستخدمين في Sprint 1.5b/1.5c لأن Sprint 2 لم يبدأ
+> (شرط: إغلاق GAP-001 بالكامل أولاً). السياسة مُسجَّلة هنا لتكون مرجعاً إلزامياً
+> عند بدء Sprint 2.
+
+### 3.2 القرارات
+
+| البند | القرار |
+|-------|--------|
+| نوع الحذف | **Soft Delete**: أعمدة `deleted_at`, `deleted_by`, `deletion_reason` |
+| من يحذف | دور `admin` **فقط** |
+| من يعدّل | `Self` (بياناته الشخصية) + `admin` (أي مستخدم) |
+| Self-delete | **ممنوع** |
+| مستخدم له سجلات | **ممنوع الحذف** — يُعطَّل (deactivate) مع رسالة خطأ واضحة |
+| Purge نهائي | بعد **90 يوماً** — مؤجل إلى **P3** |
+| استعادة | خلال **30 يوماً**، `admin` فقط |
+| Audit | جدول `user_audit_log (id, user_id, action, changed_by, changed_at, old_values JSON, new_values JSON, reason)` |
+| Concurrency | **Optimistic Lock** بحقل `version` |
+| الواجهة | صفحة **"المستخدمون المحذوفون"** لـ `admin` |
+| Creator | **NOT NULL** — يبقى كما هو |
+| التوافق | Soft Delete = **ترقية متعمدة** (النظام القديم كان Hard Delete) |
+
+### 3.3 قواعد التنفيذ الملزمة
+
+1. لا حذف فيزيائي (`DELETE`) لسجلات `users` في مسار التطبيق؛ الحذف = تعيين
+   `deleted_at` + `deleted_by` + `deletion_reason`.
+2. التحقق من وجود سجلات مرتبطة قبل الحذف؛ عند وجودها يُرفض الطلب برسالة عربية
+   واضحة ويُقترح التعطيل بدلاً من الحذف.
+3. كل تعديل/حذف/استعادة يكتب صفاً في `user_audit_log` يحوي القيم القديمة والجديدة.
+4. كل تحديث يتحقق من `version` المرسل؛ عدم التطابق = تعارض (409) وليس كتابة عمياء.
+5. الاستعادة مسموحة فقط خلال 30 يوماً من `deleted_at` ولـ `admin` فقط.
+6. Purge بعد 90 يوماً مؤجل إلى P3؛ لا يُنفَّذ الآن.
+7. `creatorId` يبقى `NOT NULL`؛ لا يُعاد تصميمه ضمن هذه السياسة.
+
+### 3.4 البدائل المرفوضة
+
+| البديل | سبب الرفض |
+|--------|-----------|
+| Hard Delete كما في النظام القديم | يفقد قابلية الاستعادة والتدقيق |
+| حذف المستخدم مع سجلاته (Cascade) | يدمر تاريخ الموارد البشرية |
+| Soft delete بدون audit | لا يلبي متطلبات التتبع |
+
+---
+
+## ADR-004: تصميم محرك التقارير (Report Engine Design)
+
+### 4.1 الحالة
+
+**مقبول ومُنفَّذ في Sprint 1.5c.**
+
+الملفات:
+- `backend/src/services/report.engine.ts` — بناء وتنفيذ الاستعلام
+- `backend/src/services/report.whitelist.ts` — القائمة البيضاء والأعمدة المحظورة
+- `backend/src/services/report.export.service.ts` — تصدير CSV/PDF
+- `backend/src/middleware/rateLimit.ts` — حد المعدل
+- `backend/src/services/report.service.ts` — التكامل مع سجلات التنفيذ
+- `backend/src/controllers/report.controller.ts` + `routes/report.ts` — نقاط النهاية
+
+### 4.2 القرارات العشرة
+
+| # | البند | القرار | التنفيذ الفعلي |
+|---|-------|--------|----------------|
+| 1 | لغة الاستعلام | SQL parameterized فقط — لا string concatenation للقيم | كل القيم تمرّ كـ `$1..$n` عبر `$queryRawUnsafe(sql, ...params)`؛ لا تُدمج قيمة واحدة في النص |
+| 2 | الجداول المسموح بها | Whitelist صريحة، وأي جدول خارجها مرفوض | `ALLOWED_TABLES` (25 جدولاً) + `isAllowedTable()` + تحقق من وجود الجدول في `information_schema` |
+| 3 | المعاملات | Named params (`:param_name`) مع binding آمن | `params: { name: value }` وتُحوَّل إلى `$n`؛ مرجع غير معرّف = خطأ 400 |
+| 4 | الحد الأقصى للنتائج | 10,000 افتراضياً، قابل للتجاوز لأدوار محددة | `DEFAULT_MAX_ROWS = 10000`؛ `HARD_MAX_ROWS = 50000`؛ admin يحصل على 50,000 |
+| 5 | حد التنفيذ الزمني | 30 ثانية timeout | `SET LOCAL statement_timeout = 30000` داخل معاملة تفاعلية |
+| 6 | منع SQL injection | Regex + prepared statements + حد على الحجم | `IDENTIFIER_RE` للمعرّفات، `$n` للقيم، `MAX_FIELDS/MAX_FILTERS/MAX_IN_VALUES/MAX_STRING_LENGTH` |
+| 7 | دعم GROUP BY / ORDER BY | نعم، بحدود whitelisted | `groupBy` (أعمدة ضمن `fields`) + `orderBy` (حقول/أسماء تجميعية، `asc|desc`، حتى 5) |
+| 8 | تصدير | CSV كامل + JSON كامل + PDF أساسي (pdfkit) | `toCsv()` (UTF-8 BOM، CRLF، quoting) و`toPdf()` عبر `pdfkit`؛ JSON هو نتيجة التنفيذ نفسها |
+| 9 | الجدولة | مؤجلة إلى P3 | غير منفّذة |
+| 10 | Rate limiting | 10 تنفيذات/دقيقة/مستخدم | `reportExecutionLimiter` على execute وexport (نافذة ثابتة 60 ثانية) |
+
+### 4.3 نموذج تعريف التقرير (JSON)
+
+```json
+{
+  "table": "people",
+  "fields": ["id", "firstname", "surname"],
+  "filters": {
+    "surname": "مثال",
+    "countryId": { "op": "in", "value": [1, 2] },
+    "firstname": ":name"
+  },
+  "params": { "name": "أحمد" },
+  "groupBy": ["countryId"],
+  "aggregates": [{ "fn": "count", "field": "*", "as": "total" }],
+  "orderBy": [{ "field": "id", "dir": "asc" }],
+  "limit": 100
+}
+```
+
+المعاملات المدعومة: `eq, ne, gt, gte, lt, lte, like, ilike, in, isNull`.
+الدوال التجميعية: `count, sum, avg, min, max`.
+
+### 4.4 ضمانات الأمان
+
+1. **المعرّفات لا تُعامَل كقيم:** أسماء الجداول/الأعمدة تُتحقق مقابل قائمة ثابتة
+   (`ALLOWED_TABLES`) ومقابل `information_schema` الفعلي، ثم تُغلَّف بعلامات تنصيص.
+2. **القيم دائماً معامِلات:** حتى `LIMIT` يُمرَّر كـ `$n`.
+3. **أعمدة محظورة صراحةً:** `DENIED_COLUMNS = { password }` (موجود في `users` و`people`).
+4. **حدود حجم:** 50 حقلاً، 30 فلتراً، 100 قيمة `in`، 500 حرف للقيمة، 5 حقول ترتيب.
+5. **التنفيذ في معاملة** مع `statement_timeout` لمنع الاستعلامات المعلّقة.
+6. **التحقق مزدوج:** عند الإنشاء (`ReportValidator`) وعند التنفيذ (`ReportEngine.build`)،
+   فلا يكفي اختراق صف في قاعدة البيانات لتجاوز الحماية.
+
+### 4.5 القيود المعروفة (مُوثَّقة بصراحة)
+
+| القيد | الأثر | المعالجة |
+|-------|-------|----------|
+| PDF عبر `pdfkit` لا يشكّل العربية | قد تظهر الحروف العربية متقطعة/معكوسة في PDF | CSV/JSON سليمان؛ معالجة العربية في PDF مؤجلة (تحتاج خطاً + shaping مثل `arabic-persian-reshaper` + `bidi`) |
+| Rate limit في الذاكرة | لا يعمل عبر عدة نسخ Node | مطلوب مخزن مشترك (Redis) عند التوسع الأفقي |
+| `truncated` قد تكون `true` عند تساوي عدد الصفوف مع `limit` | إنذار زائف محتمل | مقبول حالياً؛ يمكن استعلام `limit + 1` لاحقاً |
+| لا دعم JOIN صريح | التقارير على جدول واحد | مؤجل؛ يتطلب تعريف علاقات whitelisted |
+| لا RLS على مستوى الصف | التصفية حسب الصلاحيات غير مطبقة في المحرك | مؤجلة إلى مرحلة الصلاحيات |
+
+### 4.6 بوابة القرار
+
+**الحالة:** مقبول ومُنفَّذ ومُختبَر.
+**الأدلة:** `report.engine.test.ts` (12/12) + `report.test.ts` (12/12) + regression 42/42.

@@ -1,95 +1,139 @@
 # أدلة الاختبار — GAP-001 (نظام التقارير المخصص)
 
-## 1. تصحيح مهم
+> آخر تحديث: 05 نوفمبر 2026 — Sprint 1.5b + 1.5c.
+> كل رقم أدناه مأخوذ من تشغيل فعلي، لا من تقدير.
 
-النسخة السابقة من هذا الملف ادّعت **16/16 اختباراً ناجحاً** مع الإشارة إلى ملفات اختبار
-(`report.service.test.ts`, `report.service.integration.test.ts`) **لم تكن موجودة على القرص**.
+## 1. تصحيح تاريخي
 
-تم تصحيح ذلك في Sprint 1.5. لا يُحتسب أي اختبار لم يُنفَّذ فعلياً ويُلتقط مخرجاته.
+النسخة السابقة ادّعت **16/16 اختباراً ناجحاً** مع ملفات لم تكن موجودة. صُحِّح ذلك،
+ولا يُحتسب أي اختبار لم يُنفَّذ وتُلتقط مخرجاته.
 
-## 2. ما تم تنفيذه فعلياً
+## 2. بيئة التشغيل
 
-### 2.1 اختبارات وحدة (منفّذة وناجحة)
+| البند | القيمة |
+|-------|--------|
+| قاعدة البيانات | `ihris_test_gap001` (عبر `DATABASE_URL` لهذا التشغيل فقط) |
+| Node | 25.9.0 |
+| Jest | 29.7.0 + ts-jest |
+| إعداد Jest | `forceExit: true`, `testTimeout: 30000` |
 
-الملف: `backend/src/__tests__/report.validation.test.ts`
+## 3. Backend — 42/42 ✅
 
 الأمر:
 
 ```bash
-npx jest src/__tests__/report.validation.test.ts --runInBand
+DATABASE_URL=postgresql://ihris:***@localhost:5432/ihris_test_gap001 \
+npx jest --runInBand
 ```
 
 المخرج الفعلي:
 
-```
+```text
+PASS src/__tests__/report.test.ts (5.836 s)
+PASS src/__tests__/position.test.ts
+PASS src/__tests__/auth.test.ts
+PASS src/__tests__/person.test.ts
+PASS src/__tests__/report.engine.test.ts
 PASS src/__tests__/report.validation.test.ts
-  ReportValidator.validateDefinition
-    √ يقبل تعريفاً صحيحاً كاملاً
-    √ يرفض تعريفاً بلا اسم ويعيد رسالة الخطأ الصحيحة
-    √ يرفض نوع تقرير غير مسموح
-    √ يرفض تعريفاً يحتوي محاولة حقن SQL
-    √ يعيد تحذيراً (لا خطأ) عندما يغيب حقل fields
-  ReportValidator.sanitizeDefinition
-    √ يزيل استعلام SQL الخطير ويضيف تحذيراً
-    √ يحافظ على الاستعلام الآمن كما هو
 
-Test Suites: 1 passed, 1 total
-Tests:       7 passed, 7 total
+Test Suites: 6 passed, 6 total
+Tests:       42 passed, 42 total
 ```
 
-هذه اختبارات حقيقية: تستورد الكود الفعلي وتتحقق من قيم الإرجاع (`errors`, `warnings`,
-`sqlQuery`, `warning`) — لا mocks ولا `toHaveBeenCalled`.
+### 3.1 محرك التقارير — 12/12
 
-### 2.2 اختبار تكامل (مكتوب — غير قابل للتشغيل حالياً)
+```text
+√ 1) يسترجع الصفوف المطابقة بأعمدتها الحقيقية
+√ 2) يطبّق فلتر مساواة على عمود آخر
+√ 3) يحلّ المعاملات المسماة (named params) بأمان
+√ 4) يدعم معامل in مع قيم متعددة
+√ 5) يدعم GROUP BY مع دالة count
+√ 6) يطبّق ORDER BY DESC
+√ 7) يحترم حد الصفوف (limit)
+√ 8) يرفض جدولاً خارج القائمة البيضاء
+√ 9) يرفض الأعمدة الحساسة (password)
+√ 10) يرفض حقن المعرّفات في أسماء الأعمدة
+√ 11) يرفض حقن المعرّفات في مفاتيح الفلاتر
+√ 12) يرفض الدوال التجميعية غير المسموحة
+```
 
-الملف: `backend/src/__tests__/report.test.ts`
+### 3.2 تكامل API — 12/12
 
-يستدعي الـ API فعلياً عبر `supertest`:
-`POST /api/auth/login` → `POST /api/reports` → `GET /api/reports/:id` →
-`POST /api/reports/:id/execute` → `GET /api/reports/:id/executions`، ويتحقق من قيم
-حقيقية (الاسم المخزَّن، تعريف JSON، `executionId`, `executedByUser.username`).
+```text
+√ ينشئ تعريف تقرير ثم يعيده بنفس القيم المخزّنة (33 ms)
+√ ينفّذ التقرير ويعيد صفوفاً حقيقية من قاعدة البيانات (54 ms)
+√ يحلّ معاملات وقت التشغيل (runtime params) (23 ms)
+√ يصدّر CSV ببيانات حقيقية (27 ms)
+√ يصدّر PDF صالحاً (45 ms)
+√ يرفض إنشاء تقرير بتعريف خطير (6 ms)
+√ يرفض إنشاء تقرير بجدول خارج القائمة البيضاء (6 ms)
+√ يرفض تنفيذ تقرير مُخترَق التعريف (جدول غير مسموح) (23 ms)
+√ يرفض المستخدم غير المخوّل (بلا توكن) بـ401 (8 ms)
+√ يرفض تعريفاً خاطئاً (اسم مفقود) بـ400 ورسالة واضحة (5 ms)
+√ يعدّل تعريف تقرير ويعيد الإصدار المحدَّث (31 ms)
+√ يحذف تعريف تقرير بأمان (204 ثم يختفي من القائمة) (32 ms)
+```
 
-**حالة التشغيل: ❌ لم يُنفَّذ بنجاح.** عائقان مستقلان:
+### 3.3 تحقق التعريف — 7/7
 
-1. **الترحيل معلّق (سياسة المهمة):** جدول `report_definitions` غير موجود في قاعدة البيانات،
-   لذا أول `POST /api/reports` سيفشل بخطأ Prisma `P2021`. تشغيل الاختبار يتطلب تطبيق
-   `migrations/pending/001_create_report_tables.sql` — وهو ممنوع في هذه المهمة.
-2. **تلف في `node_modules`:** تشغيل Jest يفشل قبل الوصول إلى الاختبار:
-   `Cannot find module './plugins/index' from 'node_modules/formidable/src/index.js'`
-   (حزمة `formidable` غير مكتملة داخل `node_modules`، وهي تبعية لـ `supertest`).
+```text
+PASS src/__tests__/report.validation.test.ts
+Tests: 7 passed, 7 total
+```
 
-لذلك لا يوجد دليل تشغيل حقيقي لهذا الاختبار بعد.
+## 4. Frontend — 3/3 ✅
 
-### 2.3 اختبارات regression
+```text
+Test Files  1 passed (1)
+     Tests  3 passed (3)
+```
 
-لم تُشغَّل. الاختبارات الموجودة (`auth.test.ts`, `person.test.ts`, `position.test.ts`)
-تتطلب قاعدة بيانات وتتأثر بنفس مشكلة `node_modules` عبر `supertest`.
-**لا يوجد ادعاء بنجاح regression.**
+## 5. TypeScript
 
-## 3. الخلاصة
+```text
+backend:  npx tsc --noEmit → TSC_OK
+frontend: npx tsc --noEmit → FRONTEND_TSC_OK
+```
 
-| الفئة | العدد | ناجح | فاشل | لم يُشغَّل |
-|-------|-------|-------|-------|-----------|
-| اختبارات وحدة | 7 | 7 | 0 | 0 |
-| اختبارات تكامل | 3 | 0 | 0 | 3 |
-| اختبارات أمان (ضمن الوحدة) | 2 | 2 | 0 | 0 |
-| اختبارات regression | 0 | 0 | 0 | غير محددة |
-| **الإجمالي المثبت** | **7** | **7** | **0** | **3** |
+## 6. التبعيات
 
-## 4. أدلة إضافية (ليست اختبارات)
+```text
+backend:  npm ci → added 521 packages
+          npm ls --depth=0 → نظيف (25 حزمة جذرية، منها jest-util@29.7.0)
+frontend: npm ci → added 265 packages
+          npm ls --depth=0 → نظيف (21 حزمة جذرية)
+```
 
-| معرف | العنصر | الدليل |
-|------|--------|--------|
-| EVID-GAP001-01 | التحقق من مخطط Prisma | `npx prisma validate` → "The schema ... is valid" |
-| EVID-GAP001-02 | ترجمة الخلفية | `npx tsc --noEmit` → بلا أخطاء |
-| EVID-GAP001-03 | بناء الواجهة | `npx vite build` → built successfully |
-| EVID-GAP001-04 | ترحيل idempotent | كل الجداول/الفهارس تستخدم `IF NOT EXISTS` |
-| EVID-GAP001-05 | rollback | `migrations/rollback/001_create_report_tables_rollback.sql` |
+## 7. دليل SQL فعلي
 
-## 5. عوائق معروفة (تفصيلها في 05-BLOCKERS.md)
+```text
+prisma:query SELECT column_name FROM information_schema.columns
+  WHERE table_schema = 'public' AND table_name = $1
+prisma:query BEGIN
+prisma:query SET LOCAL statement_timeout = 30000
+prisma:query SELECT "id", "name", "code" FROM "countries" ORDER BY "id" ASC LIMIT $1
+prisma:query COMMIT
 
-| معرف | العائق |
-|------|--------|
-| BLK-003 | محرك التنفيذ stub — لا ينفّذ SQL فعلياً |
-| BLK-004 | الترحيل غير مطبَّق → اختبار التكامل مستحيل |
-| BLK-005 | `node_modules` تالف → `supertest`/`jest` لا يعملان بشكل موثوق |
+SQL: SELECT "id", "name", "code" FROM "countries" ORDER BY "id" ASC LIMIT $1
+COLUMNS: ["id","name","code"]
+ROW_COUNT: 5
+PARAM_COUNT: 1
+ROWS: الجمهورية اليمنية / مصر / السعودية / الإمارات / الأردن
+```
+
+## 8. الخلاصة
+
+| الفئة | العدد | ناجح | فاشل |
+|-------|-------|-------|------|
+| Backend | 42 | 42 | 0 |
+| Frontend | 3 | 3 | 0 |
+| **الإجمالي** | **45** | **45** | **0** |
+| TypeScript | 2 مشروع | 2 | 0 |
+
+## 9. قيود الاختبار
+
+| القيد | الأثر |
+|-------|-------|
+| اختبارات `person`/`position` تمسح بياناتها (`deleteMany`) | تعمل على `ihris_test_gap001` فقط، لا `ihris_manage` |
+| Rate limit في الذاكرة | لا يُختبر عبر عمليات متعددة |
+| PDF لا يشكّل العربية | يُتحقق من صلاحية الملف (`%PDF-`) لا من صحة العرض البصري |

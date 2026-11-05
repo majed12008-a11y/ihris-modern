@@ -85,3 +85,36 @@
 
 **التوقف قبل Sprint 2.** البوابة لم تُجتز بسبب البند 5 (اختبار تكامل غير مشغَّل).
 المطلوب قرار بشأن: تطبيق الترحيل في بيئة اختبار، وإعادة تثبيت نظيفة للتبعيات.
+
+> **تحديث (اليوم 4):** جرى تنفيذ هذين القرارين واجتُزت البوابة — انظر قسم اليوم 4 أدناه.
+
+---
+
+## اليوم 4 — 05 نوفمبر 2026 — Sprint 1.5b + 1.5c (تنفيذ)
+
+| الوقت | المهمة | التفاصيل | الحالة |
+|-------|--------|----------|--------|
+| 08:00 | نسخ احتياطي لملفات القفل | `backend/package-lock.json.backup` + `frontend/...backup` | ✅ |
+| 08:10 | `npm ci` backend | 536 حزمة ثم 521 بعد إضافة `jest-util` | ✅ |
+| 08:30 | `npm ci` frontend | 265 حزمة | ✅ |
+| 08:40 | `python` — لا؛ `pg_dump` | نسخة `ihris_manage` → `backups/…201854.dump` (152,671 بايت) | ✅ |
+| 08:50 | إنشاء `ihris_test_gap001` + استعادة | UTF8 + 53 جدولاً | ✅ |
+| 09:00 | تطبيق الترحيل | camelCase؛ rollback + idempotency | ✅ |
+| 09:20 | تشغيل `report.test.ts` | فشل أول: `P2022 isEnabled` → إصلاح الترحيل | ✅ |
+| 09:40 | تشغيل التكامل | 3/3 ثم 8/8 ثم 12/12 | ✅ |
+| 10:00 | إصلاح auth 401 | `unauthorized()` بدل 500 | ✅ |
+| 10:20 | إصلاح person/position | منح admin + منشأة اختبار | ✅ |
+| 10:40 | إصلاح frontend Login + deps | `htmlFor` + jsdom/testing-library | ✅ |
+| 11:00 | `report.whitelist.ts` + `report.engine.ts` | SQL مُعامَل + حدود | ✅ |
+| 12:00 | `report.export.service.ts` + rate limit | CSV/PDF + 10/دقيقة | ✅ |
+| 12:30 | `report.engine.test.ts` | 12/12 | ✅ |
+| 13:00 | توثيق ADR-003/ADR-004 | `04-DECISIONS.md` | ✅ |
+| 13:30 | `CORRECTED-GAP-REGISTRY.md` | 44 فجوة + 6 عيوب | ✅ |
+| 14:00 | تحديث جميع الوثائق | DASHBOARD/verification/evidence/blockers/risk/evidence-matrix | ✅ |
+| 14:30 | Regression نهائي | 42 backend + 3 frontend + tsc ✅ | ✅ |
+| 15:00 | Commit | `feature/GAP-001-custom-reports` | ✅ |
+
+### الخلاصة
+
+بوابة Sprint 1.5b اجتُزت بالكامل، ومحرك 1.5c يعمل فعلياً. GAP-001 **مكتملة**.
+Sprint 2 ينتظر اعتماد التقرير النهائي.

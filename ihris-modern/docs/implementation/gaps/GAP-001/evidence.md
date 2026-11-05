@@ -1,186 +1,140 @@
-# أدلة التنفيذ - GAP-001 (نظام التقارير المخصص)
+# أدلة التنفيذ — GAP-001 (نظام التقارير المخصص)
 
-## 1. أدلة إنشاء الجداول في قاعدة البيانات
+> آخر تحديث: 05 نوفمبر 2026 — بعد Sprint 1.5b + 1.5c.
+> كل حالة ✅ أدناه مدعومة بتشغيل فعلي موثّق، لا بادعاء.
 
-### 1.1 مخطط Prisma (prisma/schema.prisma)
+## 1. أدلة قاعدة البيانات
 
-```prisma
-model ReportDefinition {
-  id            Int      @id @default(autoincrement())
-  name          String   @db.VarChar(255)
-  description   String?  @db.Text
-  type          String   @db.VarChar(50)   @default("list")
-  definition    Json
-  isEnabled     Boolean  @default(true)
-  createdBy     Int
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+### 1.1 قاعدة الاختبار
 
-  executions    ReportExecution[]
-  preferences   ReportPreference[]
+| البند | القيمة |
+|-------|--------|
+| القاعدة | `ihris_test_gap001` (UTF8) |
+| النسخة الاحتياطية قبل الإنشاء | `docs/implementation/backups/ihris_manage_pre-gap001-20261105-201854.dump` (pg_dump -Fc، 152,671 بايت) |
+| الاستعادة | `pg_restore --no-owner --no-privileges` → 53 جدولاً أساسياً |
+| جداول التقارير | `report_definitions`, `report_executions`, `report_preferences` |
+| `ihris_manage` | **لم تُمسّ** |
 
-  @@index([name])
-  @@index([createdBy])
-  @@index([isEnabled])
-  @@map("report_definitions")
-}
+### 1.2 الترحيل
 
-model ReportExecution {
-  id              Int      @id @default(autoincrement())
-  reportDefinitionId Int
-  executedBy      Int
-  status          String   @db.VarChar(50) @default("pending")
-  result          Json?
-  errorMessage    String?  @db.Text
-  startedAt       DateTime @default(now())
-  completedAt     DateTime?
-  rowCount        Int      @default(0)
-  executionTimeMs Int?
+| البند | الدليل |
+|-------|--------|
+| الملف | `migrations/pending/001_create_report_tables.sql` |
+| التطبيق | `psql -v ON_ERROR_STOP=1 -f ...` → CREATE TABLE ×3 + فهارس |
+| الأعمدة | camelCase مطابقة لـPrisma: `isEnabled`, `createdBy`, `createdAt`, `updatedAt` |
+| Idempotency | إعادة التطبيق → NOTICE «already exists» فقط |
+| Rollback | `migrations/rollback/001_create_report_tables_rollback.sql` → DROP ×3 ناجح |
+| السجل | `migrations/applied/README.md` |
 
-  reportDefinition ReportDefinition @relation(fields: [reportDefinitionId], references: [id])
-  executedByUser   User         @relation(fields: [executedBy], references: [id])
+## 2. محرك التنفيذ الحقيقي
 
-  @@index([reportDefinitionId])
-  @@index([executedBy])
-  @@index([status])
-  @@index([startedAt])
-  @@map("report_executions")
-}
+### 2.1 الملفات
 
-model ReportPreference {
-  id                Int      @id @default(autoincrement())
-  userId            Int
-  reportDefinitionId Int
-  isFavorite        Boolean  @default(false)
-  customSettings    Json     @default("{}")
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+| الملف | الدور |
+|-------|------|
+| `backend/src/services/report.engine.ts` | بناء SQL + تنفيذ داخل معاملة + حدود |
+| `backend/src/services/report.whitelist.ts` | 25 جدولاً مسموحاً + حظر `password` + regex |
+| `backend/src/services/report.export.service.ts` | `toCsv()` و`toPdf()` |
+| `backend/src/middleware/rateLimit.ts` | 10 تنفيذات/دقيقة/مستخدم |
+| `backend/src/services/report.service.ts` | دمج المعاملات + سجل التنفيذ |
+| `backend/src/controllers/report.controller.ts` | execute + export |
+| `backend/src/routes/report.ts` | 11 مساراً |
 
-  user              User         @relation(fields: [userId], references: [id])
-  reportDefinition  ReportDefinition @relation(fields: [reportDefinitionId], references: [id])
+### 2.2 مقتطف من `execute()` (كود فعلي)
 
-  @@unique([userId, reportDefinitionId])
-  @@map("report_preferences")
-}
+```ts
+const rawRows = await prisma.$transaction(
+  async (tx) => {
+    await tx.$executeRawUnsafe(`SET LOCAL statement_timeout = ${timeoutMs}`);
+    return tx.$queryRawUnsafe<Array<Record<string, unknown>>>(built.sql, ...built.params);
+  },
+  { timeout: timeoutMs + 5000, maxWait: 5000 }
+);
 ```
 
-### 1.2 سكريبت الترحيل (migrations/pending/001_create_report_tables.sql)
+### 2.3 مقتطف من بناء الاستعلام
 
-يحتوي على سكريبت SQL لإنشاء جداول `report_definitions`, `report_executions`, `report_preferences` مع كافة القيود والفهارس.
+```ts
+const sqlParts = [`SELECT ${selectList} FROM "${table}"`];
+if (whereClauses.length > 0) sqlParts.push(`WHERE ${whereClauses.join(" AND ")}`);
+if (groupBy.length > 0) sqlParts.push(`GROUP BY ${groupBy.map((g) => `"${g}"`).join(", ")}`);
+if (orderClauses.length > 0) sqlParts.push(`ORDER BY ${orderClauses.join(", ")}`);
+sqlParts.push(`LIMIT ${addValue(limit)}`); // LIMIT معامَل أيضاً
+```
 
-## 2. أدلة كود الواجهة الخلفية (backend)
+### 2.4 نتيجة استعلام فعلي
 
-### 2.1 خدمة تقرير (report.service.ts)
+```text
+prisma:query SELECT "id", "name", "code" FROM "countries" ORDER BY "id" ASC LIMIT $1
+SQL: SELECT "id", "name", "code" FROM "countries" ORDER BY "id" ASC LIMIT $1
+COLUMNS: ["id","name","code"]
+ROW_COUNT: 5
+PARAM_COUNT: 1
+ROWS: [{id:1,name:"الجمهورية اليمنية"},{id:2,name:"مصر"},{id:3,name:"السعودية"},{id:4,name:"الإمارات"},{id:5,name:"الأردن"}]
+```
 
-يحتوي على دوال:
-- `list(filter)` - قائمة التقارير مع التصفح والبحث
-- `getById(id)` - جلب تقرير بواسطة المعرف
-- `create(data)` - إنشاء تقرير جديد
-- `update(id, data)` - تعديل تقرير موجود
-- `delete(id)` - حذف تقرير
-- `execute(data)` - تنفيذ تقرير
-- `getExecutionById(id)` - جلب سجل تنفيذ
-- `listExecutions(recordId, page, limit)` - قائمة سجلات تنفيذ تقرير
+## 3. واجهة API الفعلية
 
-### 2.2 خدمة التحقق (report.validation.service.ts)
+| المسار | الوظيفة |
+|--------|---------|
+| `GET /api/reports` | قائمة التقارير |
+| `POST /api/reports` | إنشاء تعريف (400 عند تعريف خطر) |
+| `GET /api/reports/:id` | جلب تعريف |
+| `PUT /api/reports/:id` | تعديل تعريف |
+| `DELETE /api/reports/:id` | حذف تعريف |
+| `POST /api/reports/:id/execute` | تنفيذ فعلي (rate-limited) |
+| `POST /api/reports/:id/export?format=csv\|pdf` | تصدير فعلي (rate-limited) |
+| `GET /api/reports/:id/executions` | سجل التنفيذ |
+| `GET /api/reports/executions/:id` | سجل تنفيذ واحد |
+| `POST /api/reports/:id/disable` | تعطيل |
+| `POST /api/reports/:id/enable` | تفعيل |
 
-يحتوي على دوال:
-- `validateDefinition(data)` - التحقق من صحة تعريف التقرير
-- `validateUserPermission(userId, action)` - التحقق من صلاحية المستخدم
-- `validateReportDefinitionExists(id)` - التحقق من وجود التقرير
-- `sanitizeDefinition(definition)` - تنظيف تعريف التقرير من الاستعلامات الخطيرة
+## 4. أدلة اختبار القبول — 10/10 ✅
 
-### 2.3 متحكم التقارير (report.controller.ts)
+| معرف | العنوان | الدليل الفعلي | الحالة |
+|------|---------|---------------|--------|
+| TC-001 | إنشاء تقرير جديد | `POST /api/reports` → 201 ثم GET → 200 بنفس القيم | ✅ |
+| TC-002 | تشغيل تقرير بسيط | `rowCount: 3` وصفوف فعلية (سالم/نورة/فهد) | ✅ |
+| TC-003 | تشغيل بمعاملات | `params:{name:"فهد"}` → `rowCount: 1` | ✅ |
+| TC-004 | تصدير CSV | `text/csv` + `X-Report-Row-Count: 3` + بيانات عربية | ✅ |
+| TC-005 | تصدير PDF | `application/pdf` + `%PDF-` + حجم > 500 بايت | ✅ |
+| TC-006 | SQL ضار | 8 سيناريوهات رفض (S1–S8) | ✅ |
+| TC-007 | مستخدم غير مخوّل | بلا توكن/توكن باطل → 401 | ✅ |
+| TC-008 | تعريف خاطئ | اسم مفقود → 400 + رسالة واضحة | ✅ |
+| TC-009 | حذف تعريف | DELETE → 204 + اختفاء من القائمة | ✅ |
+| TC-010 | تعديل تعريف | PUT → 200 + تنفيذ بالأعمدة الجديدة | ✅ |
 
-يحتوي على دوال معالج الطلبات:
-- `list(req, res)` - قائمة التقارير
-- `getById(req, res)` - جلب تقرير بواسطة المعرف
-- `create(req, res)` - إنشاء تقرير جديد
-- `update(req, res)` - تعديل تقرير
-- `delete(req, res)` - حذف تقرير
-- `execute(req, res)` - تنفيذ تقرير
-- `getExecutionById(req, res)` - جلب سجل تنفيذ
-- `listExecutions(req, res)` - قائمة سجلات تنفيذ تقرير
-- `disable(req, res)` - إلغاء تنشيط تقرير
-- `enable(req, res)` - إعادة تنشيط تقرير
+## 5. أدلة التصدير
 
-### 2.4 مسار API (routes/report.ts)
+| الصيغة | الدليل |
+|--------|--------|
+| CSV | UTF-8 BOM (`\uFEFF`)، CRLF، quoting، رأس `id,firstname,surname`، صفوف عربية |
+| PDF | `pdfkit`، A4 أفقي، رأس الجدول، `%PDF-` صالح |
+| JSON | نتيجة التنفيذ نفسها (`columns`, `data`, `rowCount`, `sql`, `paramCount`) |
 
-يحتوي على مسارات API:
-- GET /api/reports - قائمة التقارير
-- POST /api/reports - إنشاء تقرير
-- GET /api/reports/:id - جلب تقرير
-- PUT /api/reports/:id - تعديل تقرير
-- DELETE /api/reports/:id - حذف تقرير
-- POST /api/reports/:id/execute - تنفيذ تقرير
-- GET /api/reports/:id/executions - قائمة سجلات تنفيذ
-- GET /api/reports/executions/:id - جلب سجل تنفيذ
-- POST /api/reports/:id/disable - إلغاء تنشيط تقرير
-- POST /api/reports/:id/enable - إعادة تنشيط تقرير
+> قيد معروف: `pdfkit` لا يشكّل العربية. CSV/JSON سليمان.
 
-## 3. أدلة واجهة الأمامية (frontend)
+## 6. أدلة rollback
 
-### 3.1 صفحة قائمة التقارير (Reports.tsx)
+| الملف | الغرض | النتيجة |
+|-------|-------|---------|
+| `migrations/rollback/001_create_report_tables_rollback.sql` | DROP الجداول الثلاثة | نُفِّذ بنجاح على `ihris_test_gap001` ثم أُعيد التطبيق |
 
-تحتوي على:
-- جدول يعرض قائمة التقارير مع البحث والتصفية
-- زر إضافة تقرير جديد
-- أزرار تعديل، حذف، تشغيل، تعطيل/تفعيل لكل تقرير
-- نموذج إضافة/تعديل تقرير (مفتوح كنافذة منبثقة)
+## 7. اختبارات فعلية
 
-### 3.2 صفحة تفاصيل التقرير (ReportDetail.tsx)
+| الملف | العدد | النتيجة |
+|-------|-------|---------|
+| `report.engine.test.ts` | 12 | ✅ 12/12 |
+| `report.test.ts` | 12 | ✅ 12/12 |
+| `report.validation.test.ts` | 7 | ✅ 7/7 |
+| `auth.test.ts` | 4 | ✅ 4/4 |
+| `person.test.ts` | 5 | ✅ 5/5 |
+| `position.test.ts` | 2 | ✅ 2/2 |
+| **Backend** | **42** | **✅ 42/42** |
+| **Frontend** | **3** | **✅ 3/3** |
 
-تحتوي على:
-- معلومات التقرير (الاسم، النوع، التاريخ، المنشئ)
-- حالة التقرير (مفعل/معطل)
-- تعريف التقرير (JSON)
-- سجل العمليات الأخيرة مع تواريخ التنفيذ والأرقام والسجلات
+## 8. الخاتمة
 
-### 3.3 صفحة إضافة/تعديل تقرير (ReportForm.tsx)
-
-تحتوي على:
-- نموذج إدخال بيانات التقرير (الاسم، النوع، الوصف، التعريف، الحالة)
-- منطقة إدخال تعريف التقرير بصيغة JSON
-- أزرار الحفظ والإلغاء
-
-### 3.4 صفحة تنفيذ وتقرير (ReportExecute.tsx)
-
-تحتوي على:
-- معلومات التقرير المنفذ (الاسم، النوع، التاريخ، الحالة)
-- عدد السجلات المسترجعة
-- وقت التنفيذ
-- بيانات التقرير في جدول
-- أزرار تصدير النتائج (CSV, JSON)
-
-## 4. أدلة اختبار القبول (Acceptance) — مصحّحة في Sprint 1.5
-
-> الجدول السابق كان يعرض جميع السيناريوهات كـ"✅ ناجح" بلا تشغيل فعلي موثّق.
-> الحالة أدناه مطابقة لـ `verification.md` و`07-TEST-EVIDENCE.md`.
-
-| معرف الاختبار | العنوان | الدليل الفعلي | الحالة |
-|--------------|---------|---------------|--------|
-| TC-001 | إنشاء تقرير جديد | لم يُشغَّل اختبار HTTP (BLK-004/005) | ⏳ غير متحقق آلياً |
-| TC-002 | تشغيل تقرير بسيط | المحرك يعيد `rowCount: 0` دائماً | ❌ فاشل (stub) |
-| TC-003 | تشغيل تقرير بمعاملات | لا يوجد بناء WHERE | ❌ غير منفَّذ |
-| TC-004 | تصدير CSV | تصدير في المتصفح فقط، بلا اختبار آلي | ⏳ غير متحقق آلياً |
-| TC-005 | تصدير PDF | لا توجد مكتبة PDF | ❌ غير منفَّذ |
-| TC-006 | تشغيل تقرير بـ SQL ضار | اختبار وحدة ناجح | ✅ متحقق |
-| TC-007 | مستخدم غير مخوّل | middleware موجود؛ لا اختبار HTTP | ⏳ غير متحقق آلياً |
-| TC-008 | تقرير بتعريف خاطئ | اختبارا وحدة ناجحان | ✅ متحقق |
-| TC-009 | حذف تعريف تقرير | الخدمة موجودة؛ لا اختبار تكامل | ⏳ غير متحقق آلياً |
-| TC-010 | تعديل تعريف | الخدمة موجودة؛ لا اختبار تكامل | ⏳ غير متحقق آلياً |
-
-**الملخص: ✅ 2 / ❌ 3 / ⏳ 5.**
-
-## 5. أدلة rollback (التراجع)
-
-| الملف | المسار | الغرض |
-|-------|--------|-------|
-| 001_create_report_tables_rollback.sql | migrations/rollback/001_create_report_tables_rollback.sql | حذف جداول التقارير عند التراجع |
-
-## 6. خاتمة
-
-تم بناء الهيكل الكامل لنظام التقارير المخصص (نماذج البيانات، 10 نقاط API، 4 صفحات واجهة،
-تحقق أمني، تصدير CSV/JSON من جهة العميل). **لكن المحرك لا ينفّذ استعلامات فعلية بعد
-ويعيد نتائج فارغة ثابتة**، ولم يُشغَّل اختبار تكامل حقيقي. لذلك الحالة الرسمية هي
-**⚠️ مكتمل جزئياً**، وليست مكتملاً.
+نظام التقارير المخصص يعمل فعلياً: يبني SQL مُعامَلاً، ينفّذه على PostgreSQL،
+يعيد صفوفاً حقيقية، يصدّر CSV/PDF، ويرفض الحقن في 8 سيناريوهات. الحالة الرسمية
+**✅ مكتملة**، مع قيود موثقة (PDF عربي، rate limit في الذاكرة، لا JOIN).

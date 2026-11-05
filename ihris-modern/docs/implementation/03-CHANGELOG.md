@@ -1,5 +1,39 @@
 # سجل التغييرات (Changelog)
 
+## [0.3.0] - 05 نوفمبر 2026 — Sprint 1.5b + 1.5c (إغلاق GAP-001)
+
+### أُغلق
+- **GAP-001**: ✅ مكتملة — محرك تقارير حقيقي + 10/10 سيناريوهات + regression 45/45.
+- **BLK-001**: العدد الكانوني 44 (إداري 22).
+- **BLK-003**: محرك SQL حقيقي بدل stub.
+- **BLK-004**: قاعدة اختبار `ihris_test_gap001` + ترحيل مطبَّق.
+- **BLK-005**: `npm ci` نظيف + `jest-util`.
+
+### أضيف
+- `report.engine.ts` — بناء وتنفيذ SQL parameterized + GROUP BY/ORDER BY + حدود.
+- `report.whitelist.ts` — 25 جدولاً مسموحاً + حظر `password` + regex.
+- `report.export.service.ts` — CSV (BOM/CRLF) + PDF (pdfkit).
+- `middleware/rateLimit.ts` — 10 تنفيذات/دقيقة/مستخدم.
+- `POST /api/reports/:id/export?format=csv|pdf`.
+- `report.engine.test.ts` — 12 اختباراً.
+- 9 اختبارات إضافية في `report.test.ts` (params/CSV/PDF/401/400/update/delete/injection).
+- `CORRECTED-GAP-REGISTRY.md` — 44 فجوة + 6 عيوب في التقارير الأصلية.
+- ADR-003 (سياسة إدارة المستخدمين) وADR-004 (تصميم المحرك) في `04-DECISIONS.md`.
+- BLK-006 — عيوب جودة بيانات تقارير الدراسة.
+
+### صُحِّح
+- الترحيل: snake_case → camelCase (`isEnabled`, `createdBy`, ...) لمطابقة Prisma.
+- `AuthService.login`: 401 بدل 500.
+- اختبارات person/position: منح دور admin + إنشاء منشأة بدل `facilityId: 1`.
+- `Login.tsx`: `htmlFor`/`id` للحقول.
+- `jest.config.js`: `forceExit` + `testTimeout: 30000`.
+- نصوص "مكتمل جزئياً" و"stub" في جميع الوثائق.
+
+### ملاحظات
+- PDF لا يشكّل العربية (قيد `pdfkit`).
+- Rate limit في الذاكرة لكل عملية Node.
+- لا JOIN في المحرك.
+
 ## [0.2.1] - 04 نوفمبر 2026 — Sprint 1.5 (مراجعة وتصحيح)
 
 ### صُحِّح
