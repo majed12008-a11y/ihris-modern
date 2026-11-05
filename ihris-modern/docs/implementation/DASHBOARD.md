@@ -79,4 +79,4 @@
 | لم تُنفَّذ migrations على قاعدة البيانات | ✅ | كلها في `pending/` |
 | `docs/legacy-modern-comparison/` | ⚠️ | أُضيف **ملحق A فقط** إلى `12-GAP-ANALYSIS.md` بأمر Sprint 1.5/2؛ لم يُعدَّل المحتوى الأصلي |
 | نطاق Sprint 1 | ✅ | التغييرات في نطاق GAP-001 فقط |
-| `git status` | ⚠️ | نظيف بعد commit داخل الفرع، مع ملفات غير ذات صلة (dist، mysql-to-postgres.sql) متروكة |
+| `git status` | ⚠️ | نظيف ضمن نطاق GAP-001 بعد الـ commits؛ تبقّى تغييرات غير ذات صلة (`frontend/dist/*`, `migrations/mysql-to-postgres.sql`) وملفات `12..17` غير متتبَّعة |
