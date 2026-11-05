@@ -14,6 +14,10 @@ import Training from "@/pages/Training";
 import TrainingForm from "@/pages/TrainingForm";
 import Users from "@/pages/Users";
 import UserForm from "@/pages/UserForm";
+import Reports from "@/pages/Reports";
+import ReportDetail from "@/pages/ReportDetail";
+import ReportForm from "@/pages/ReportForm";
+import ReportExecute from "@/pages/ReportExecute";
 
 function LoadingSpinner() {
   return (
@@ -63,6 +67,11 @@ export default function App() {
           <Route path="training/new" element={<TrainingForm />} />
           <Route path="users" element={<Users />} />
           <Route path="users/new" element={<UserForm />} />
+          <Route path="reports" element={<Reports />} />
+          <Route path="reports/new" element={<ReportForm />} />
+          <Route path="reports/:id" element={<ReportDetail />} />
+          <Route path="reports/:id/edit" element={<ReportForm />} />
+          <Route path="reports/:id/execute" element={<ReportExecute />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
