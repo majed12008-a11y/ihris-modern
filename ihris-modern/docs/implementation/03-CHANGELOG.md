@@ -1,0 +1,68 @@
+# سجل التغييرات (Changelog)
+
+## [0.2.1] - 04 نوفمبر 2026 — Sprint 1.5 (مراجعة وتصحيح)
+
+### صُحِّح
+- **حالة GAP-001**: من "مكتمل" إلى **"مكتمل جزئياً"** في `verification.md`, `DASHBOARD.md`,
+  وملحق `12-GAP-ANALYSIS.md`.
+- **أدلة اختبار مضلّلة**: ادعاء 16/16 اختباراً ناجحاً في `07-TEST-EVIDENCE.md` كان بلا ملفات
+  اختبار. استُبدل بمخرجات حقيقية (7/7 اختبارات وحدة) وتوثيق صريح للاختبارات غير المشغّلة.
+- **مخطط Prisma**: أُضيفت حقول العلاقات العكسية المفقودة على `User` و`ReportDefinition`
+  (`createdByUser`, `reportExecutions`, `reportPreferences`) — المخطط لم يكن صالحاً قبلها.
+- **متحكم التقارير**: استخدام `AuthRequest` بدل `Request` — الخلفية لم تكن تُترجم قبلها.
+- **الترحيل**: تصحيح المراجع من `"user"` إلى `"users"` (اسم الجدول الفعلي).
+- **rollback**: إنشاء `migrations/rollback/001_create_report_tables_rollback.sql`
+  (الاسم السابق `001_drop_report_tables.sql` لا يطابق التسمية المطلوبة).
+
+### أضيف
+- `backend/src/__tests__/report.validation.test.ts` — 7 اختبارات وحدة حقيقية (ناجحة).
+- `backend/src/__tests__/report.test.ts` — 3 اختبارات تكامل حقيقية (مكتوبة، محجوبة).
+- إصلاح `jest.config.js` لاستخدام `transform` بدل preset المعطوب.
+- `05-BLOCKERS.md`: BLK-003 (محرك stub)، BLK-004 (ترحيل معلّق)، BLK-005 (تلف node_modules).
+
+### خطأ إجرائي موثّق
+- **العمل تم على `main` دون فرع مخصص** في Sprint 1. لم يكن هناك فرع ولا commits.
+- المعالجة: أُنشئ الفرع `feature/GAP-001-custom-reports` في Sprint 1.5 ونُقل إليه العمل
+  عبر 4 commits مرتبطة بـ `[GAP-001]`.
+- **كيف نتجنبه في Sprint 2:** إنشاء الفرع **قبل** أول تعديل، والالتزام بـ commit بعد كل مهمة
+  (وليست دفعة واحدة في النهاية).
+
+## [0.2.0] - 04 نوفمبر 2026
+
+> ⚠️ ملاحظة: بعض ادعاءات هذا الإصدار (اكتمال GAP-001 و16/16 اختباراً) صُحِّحت في 0.2.1.
+
+### أضيف
+- نظام التقارير المخصص (Custom Reports System) - GAP-001
+  - نموذج ReportDefinition في Prisma schema
+  - نموذج ReportExecution في Prisma schema
+  - نموذج ReportPreference في Prisma schema
+  - خدمة تقرير (report.service.ts) مع عمليات CRUD وتنفيذ التقارير
+  - خدمة التحقق من صحة تعريفات التقارير (report.validation.service.ts)
+  - متحكم التقارير (report.controller.ts) مع 10 نقاط نهاية API
+  - مسار API /api/reports مع 10 نقاط نهاية
+  - صفحة قائمة التقارير (Reports.tsx)
+  - صفحة تفاصيل التقرير (ReportDetail.tsx)
+  - صفحة إضافة/تعديل تقرير (ReportForm.tsx)
+  - صفحة تنفيذ وعرض تقرير (ReportExecute.tsx)
+  - مسارات واجهة المستخدم للتقارير (6 مسارات)
+
+### تم التعديل
+- backend/src/app.ts - إضافة مسار /api/reports
+- frontend/src/App.tsx - إضافة مسارات التقارير (6 مسارات)
+- backend/prisma/schema.prisma - إضافة نماذج ReportDefinition, ReportExecution, ReportPreference
+
+### سكريبتات الترحيل
+- migrations/pending/001_create_report_tables.sql - إنشاء جداول التقارير
+
+## [0.1.0] - 04 نوفمبر 2026
+
+### أضيف
+- إنشاء هيكل ihris-modern/ بالكامل
+- إنشاء خلفية Node.js + Express + TypeScript + Prisma
+- إنشاء واجهة أمامية React + TypeScript + Vite + Tailwind CSS
+- إنشاء مخطط قاعدة بيانات PostgreSQL مع 52 نموذج
+- إنشاء 31 مسار API للتقارير، الأشخاص، الوظائف، المنشآت، الرواتب، التدريب، المستخدمين
+- إنشاء 12 صفحة واجهة أمامية
+- إنشاء سكريبت ترحيل البيانات من MySQL إلى PostgreSQL
+- إنشاء Docker Compose للنشر السريع
+- إنشاء خطة التنفيذ (PLAN_AR.md)
