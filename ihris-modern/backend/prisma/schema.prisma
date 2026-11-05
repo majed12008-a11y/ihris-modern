@@ -29,6 +29,10 @@ model User {
   person    Person?  @relation(fields: [personId], references: [id])
   personId  Int?     @unique
 
+  reportDefinitions ReportDefinition[] @relation("ReportDefinitionCreator")
+  reportExecutions  ReportExecution[]  @relation("ReportExecutionRunner")
+  reportPreferences ReportPreference[] @relation("ReportPreferenceUser")
+
   @@map("users")
 }
 
@@ -806,6 +810,7 @@ model Config {
 
 model Report {
   id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(255)
   type      String   @db.VarChar(50)
   report    String   @db.VarChar(50)
   cached    DateTime
@@ -813,4 +818,75 @@ model Report {
 
   @@unique([type, report])
   @@map("reports")
+}
+
+// ============================================
+// Custom Reports - Report Definitions
+// ============================================
+
+model ReportDefinition {
+  id            Int      @id @default(autoincrement())
+  name          String   @db.VarChar(255)
+  description   String?  @db.Text
+  type          String   @db.VarChar(50) @default("list")
+  definition    Json
+  isEnabled     Boolean  @default(true)
+  createdBy     Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  createdByUser User               @relation("ReportDefinitionCreator", fields: [createdBy], references: [id])
+  executions    ReportExecution[]
+  preferences   ReportPreference[]
+
+  @@index([name])
+  @@index([createdBy])
+  @@index([isEnabled])
+  @@map("report_definitions")
+}
+
+// ============================================
+// Custom Reports - Report Executions
+// ============================================
+
+model ReportExecution {
+  id              Int      @id @default(autoincrement())
+  reportDefinitionId Int
+  executedBy      Int
+  status          String   @db.VarChar(50) @default("pending") // pending, running, completed, failed
+  result          Json?
+  errorMessage    String?  @db.Text
+  startedAt       DateTime @default(now())
+  completedAt     DateTime?
+  rowCount        Int      @default(0)
+  executionTimeMs Int?
+
+  reportDefinition ReportDefinition @relation(fields: [reportDefinitionId], references: [id], onDelete: Cascade)
+  executedByUser   User             @relation("ReportExecutionRunner", fields: [executedBy], references: [id])
+
+  @@index([reportDefinitionId])
+  @@index([executedBy])
+  @@index([status])
+  @@index([startedAt])
+  @@map("report_executions")
+}
+
+// ============================================
+// Custom Reports - Report Preferences
+// ============================================
+
+model ReportPreference {
+  id                Int      @id @default(autoincrement())
+  userId            Int
+  reportDefinitionId Int
+  isFavorite        Boolean  @default(false)
+  customSettings    Json     @default("{}")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User             @relation("ReportPreferenceUser", fields: [userId], references: [id], onDelete: Cascade)
+  reportDefinition  ReportDefinition @relation(fields: [reportDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, reportDefinitionId])
+  @@map("report_preferences")
 }
