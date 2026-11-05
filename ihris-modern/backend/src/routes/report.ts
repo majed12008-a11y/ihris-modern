@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { ReportController } from "../controllers/report.controller";
 import { authenticate } from "../middleware/auth";
-import { requireRole } from "../middleware/rbac";
+import { reportExecutionLimiter } from "../middleware/rateLimit";
 
 const router = Router();
 
@@ -45,7 +45,14 @@ router.delete("/:id", authenticate, ReportController.delete);
  * @desc تنفيذ تقرير
  * @access Private (المستخدمون المصادق عليهم)
  */
-router.post("/:id/execute", authenticate, ReportController.execute);
+router.post("/:id/execute", authenticate, reportExecutionLimiter, ReportController.execute);
+
+/**
+ * @route POST /api/reports/:id/export?format=csv|pdf
+ * @desc تصدير نتيجة التقرير (بيانات فعلية)
+ * @access Private (المستخدمون المصادق عليهم، 10/دقيقة)
+ */
+router.post("/:id/export", authenticate, reportExecutionLimiter, ReportController.exportReport);
 
 /**
  * @route GET /api/reports/:id/executions

@@ -1,4 +1,5 @@
 import { prisma } from "../lib/prisma";
+import { ReportEngine } from "./report.engine";
 
 export interface ReportDefinitionCreateInput {
   name: string;
@@ -203,9 +204,15 @@ export class ReportService {
   }
 
   /**
-   * تنفيذ تقرير
+   * تنفيذ تقرير فعلياً عبر محرك الاستعلامات (ADR-004)
    */
-  static async execute(executionData: ReportExecutionCreateInput) {
+  static async execute(
+    executionData: ReportExecutionCreateInput & {
+      runtimeParams?: Record<string, unknown>;
+      maxRows?: number;
+      timeoutMs?: number;
+    }
+  ) {
     const reportDefinition = await prisma.reportDefinition.findUnique({
       where: { id: executionData.reportDefinitionId },
     });
@@ -218,6 +225,11 @@ export class ReportService {
       throw new Error("Report definition is disabled");
     }
 
+    const definition = this.withRuntimeParams(
+      reportDefinition.definition,
+      executionData.runtimeParams
+    );
+
     // إنشاء سجل التنفيذ
     const execution = await prisma.reportExecution.create({
       data: {
@@ -228,29 +240,36 @@ export class ReportService {
       },
     });
 
+    const startedAt = Date.now();
+
     try {
-      // هنا يتم تنفيذ الاستعلام فعليًا
-      // في هذه النسخة الأولية، نقوم بإرجاع نتيجة وهمية
-      // في الإصدار الكامل، سيتم تنفيذ الاستعلام بناءً على reportDefinition.definition
+      const engineResult = await ReportEngine.execute(definition, {
+        maxRows: executionData.maxRows,
+        timeoutMs: executionData.timeoutMs,
+      });
+
       const result = {
         reportId: reportDefinition.id,
         reportName: reportDefinition.name,
         executionId: execution.id,
-        executedAt: new Date(),
-        rowCount: 0,
-        data: [],
-        message: "Report execution engine not yet implemented - placeholder",
+        executedAt: new Date().toISOString(),
+        columns: engineResult.columns,
+        data: engineResult.rows,
+        rowCount: engineResult.rowCount,
+        truncated: engineResult.truncated,
+        executionTimeMs: engineResult.executionTimeMs,
+        sql: engineResult.sql,
+        paramCount: engineResult.paramCount,
       };
 
-      // تحديث سجل التنفيذ بالنتيجة
       await prisma.reportExecution.update({
         where: { id: execution.id },
         data: {
           status: "completed",
           completedAt: new Date(),
-          result,
-          rowCount: 0,
-          executionTimeMs: 0,
+          result: result as any,
+          rowCount: engineResult.rowCount,
+          executionTimeMs: Date.now() - startedAt,
         },
       });
 
@@ -260,18 +279,34 @@ export class ReportService {
         result,
       };
     } catch (error: any) {
-      // تحديث سجل التنفيذ بالخطأ
       await prisma.reportExecution.update({
         where: { id: execution.id },
         data: {
           status: "failed",
           completedAt: new Date(),
           errorMessage: error.message,
+          executionTimeMs: Date.now() - startedAt,
         },
       });
 
       throw error;
     }
+  }
+
+  /** يدمج معاملات وقت التشغيل داخل تعريف التقرير دون تعديل التعريف المخزَّن. */
+  private static withRuntimeParams(definition: unknown, runtimeParams?: Record<string, unknown>) {
+    if (!runtimeParams || Object.keys(runtimeParams).length === 0) {
+      return definition;
+    }
+    if (typeof definition !== "object" || definition === null || Array.isArray(definition)) {
+      return definition;
+    }
+    const base = definition as Record<string, unknown>;
+    const storedParams =
+      typeof base.params === "object" && base.params !== null && !Array.isArray(base.params)
+        ? (base.params as Record<string, unknown>)
+        : {};
+    return { ...base, params: { ...storedParams, ...runtimeParams } };
   }
 
   /**

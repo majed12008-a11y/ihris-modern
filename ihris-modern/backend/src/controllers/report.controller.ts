@@ -1,6 +1,7 @@
 import { Response } from "express";
 import { ReportService } from "../services/report.service";
 import { ReportValidator } from "../services/report.validation.service";
+import { toCsv, toPdf } from "../services/report.export.service";
 import { asyncHandler } from "../middleware/error";
 import { AuthRequest } from "../middleware/auth";
 
@@ -117,9 +118,61 @@ export class ReportController {
       reportDefinitionId,
       executedBy: userId,
       startedAt: new Date(),
+      runtimeParams: req.body?.params,
+      maxRows: req.user?.role === "admin" ? 50000 : undefined,
     });
 
     res.status(201).json(execution);
+  });
+
+  /**
+   * تصدير نتيجة تقرير كملف CSV أو PDF (بيانات فعلية من قاعدة البيانات)
+   */
+  static exportReport = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const reportDefinitionId = parseInt(req.params.id, 10);
+    const format = String(req.query.format ?? "csv").toLowerCase();
+    if (format !== "csv" && format !== "pdf") {
+      res.status(400).json({ error: "Unsupported format. Use csv or pdf." });
+      return;
+    }
+
+    const reportCheck = await ReportValidator.validateReportDefinitionExists(reportDefinitionId);
+    if (!reportCheck.exists) {
+      res.status(404).json({ error: "Report definition not found or disabled" });
+      return;
+    }
+
+    const userId = req.user?.userId || 1;
+
+    const execution = await ReportService.execute({
+      reportDefinitionId,
+      executedBy: userId,
+      startedAt: new Date(),
+      runtimeParams: req.body?.params,
+      maxRows: req.user?.role === "admin" ? 50000 : undefined,
+    });
+
+    const { columns, data } = execution.result as {
+      columns: string[];
+      data: Array<Record<string, unknown>>;
+    };
+
+    const safeName = `report-${reportDefinitionId}`;
+
+    if (format === "csv") {
+      const csv = toCsv({ columns, rows: data });
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="${safeName}.csv"`);
+      res.setHeader("X-Report-Row-Count", String(data.length));
+      res.send(csv);
+      return;
+    }
+
+    const pdf = await toPdf({ columns, rows: data }, `Report #${reportDefinitionId}`);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${safeName}.pdf"`);
+    res.setHeader("X-Report-Row-Count", String(data.length));
+    res.send(pdf);
   });
 
   /**

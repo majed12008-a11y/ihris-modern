@@ -1,6 +1,14 @@
 import { prisma } from "../lib/prisma";
 import { hashPassword, comparePassword } from "../lib/password";
 import { signToken, JwtPayload } from "../lib/jwt";
+import type { AppError } from "../middleware/error";
+
+/** خطأ مصادقة يحمل رمز 401 (بدل 500 الافتراضي) */
+function unauthorized(message = "Invalid username or password"): AppError {
+  const err = new Error(message) as AppError;
+  err.statusCode = 401;
+  return err;
+}
 
 export interface LoginInput {
   username: string;
@@ -24,12 +32,17 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new Error("Invalid username or password");
+      throw unauthorized();
     }
 
-    const isValid = await comparePassword(input.password, user.password);
+    let isValid = false;
+    try {
+      isValid = await comparePassword(input.password, user.password);
+    } catch {
+      isValid = false;
+    }
     if (!isValid) {
-      throw new Error("Invalid username or password");
+      throw unauthorized();
     }
 
     const role = user.access?.[0]?.role?.name || "hr_staff";

@@ -1,4 +1,5 @@
 import { prisma } from "../lib/prisma";
+import { ALLOWED_TABLES, IDENTIFIER_RE } from "./report.whitelist";
 
 export interface ValidationResult {
   valid: boolean;
@@ -50,6 +51,50 @@ export class ReportValidator {
       for (const keyword of dangerousKeywords) {
         if (definitionStr.includes(keyword)) {
           errors.push(`Report definition contains potentially dangerous SQL keyword: ${keyword}`);
+        }
+      }
+
+      // ADR-004: لا يُسمح بـ SQL خام داخل التعريف
+      if (Object.prototype.hasOwnProperty.call(data.definition, "sqlQuery")) {
+        errors.push("Raw SQL (sqlQuery) is not allowed; use the declarative JSON definition");
+      }
+
+      // ADR-004: الجدول يجب أن يكون ضمن القائمة البيضاء
+      if (typeof data.definition.table === "string") {
+        if (!ALLOWED_TABLES.includes(data.definition.table)) {
+          errors.push(
+            `Table "${data.definition.table}" is not allowed. Allowed: ${ALLOWED_TABLES.join(", ")}`
+          );
+        } else if (!IDENTIFIER_RE.test(data.definition.table)) {
+          errors.push(`Table name "${data.definition.table}" contains invalid characters`);
+        }
+      }
+
+      // ADR-004: أسماء الحقول/الفلاتر/الترتيب يجب أن تكون معرّفات صالحة
+      const checkIdentifiers = (values: unknown, label: string) => {
+        if (values === undefined) return;
+        if (!Array.isArray(values)) {
+          errors.push(`${label} must be an array`);
+          return;
+        }
+        for (const v of values) {
+          if (typeof v !== "string" || !IDENTIFIER_RE.test(v)) {
+            errors.push(`${label} contains invalid identifier: "${String(v)}"`);
+          }
+        }
+      };
+      checkIdentifiers(data.definition.fields, "fields");
+      checkIdentifiers(data.definition.groupBy, "groupBy");
+      checkIdentifiers(data.definition.orderBy?.map?.((o: any) => o?.field), "orderBy.field");
+      if (data.definition.filters !== undefined) {
+        if (typeof data.definition.filters !== "object" || data.definition.filters === null) {
+          errors.push("filters must be an object");
+        } else {
+          for (const key of Object.keys(data.definition.filters)) {
+            if (!IDENTIFIER_RE.test(key)) {
+              errors.push(`filters contains invalid identifier: "${key}"`);
+            }
+          }
         }
       }
     }

@@ -19,7 +19,9 @@ beforeAll(async () => {
     },
   });
 
-  await prisma.user.upsert({
+  const adminRole = await prisma.role.findUniqueOrThrow({ where: { name: "admin" } });
+
+  const user = await prisma.user.upsert({
     where: { username: "admintest" },
     update: {},
     create: {
@@ -30,6 +32,13 @@ beforeAll(async () => {
       email: "admin@test.com",
       creatorId: 1,
     },
+  });
+
+  // منح دور admin فعلياً — بدونه يرفض requireRole الطلب بـ403
+  await prisma.userAccess.upsert({
+    where: { userId_roleId: { userId: user.id, roleId: adminRole.id } },
+    update: {},
+    create: { userId: user.id, roleId: adminRole.id },
   });
 
   const loginRes = await request(app).post("/api/auth/login").send({
@@ -100,7 +109,7 @@ describe("Person API", () => {
 
   it("should search persons", async () => {
     const res = await request(app)
-      .get("/api/persons?search=الأحمدي")
+      .get(`/api/persons?search=${encodeURIComponent("الأحمدي")}`)
       .set("Authorization", `Bearer ${authToken}`);
     expect(res.status).toBe(200);
     expect(res.body.total).toBeGreaterThan(0);

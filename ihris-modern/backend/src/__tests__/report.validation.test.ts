@@ -10,7 +10,7 @@ describe("ReportValidator.validateDefinition", () => {
       name: "قائمة الموظفين",
       type: "list",
       definition: {
-        table: "persons",
+        table: "people",
         fields: ["firstname", "surname"],
         filters: { countryId: 1 },
       },
@@ -25,7 +25,7 @@ describe("ReportValidator.validateDefinition", () => {
     const result = await ReportValidator.validateDefinition({
       name: "   ",
       type: "list",
-      definition: { table: "persons", fields: ["firstname"] },
+      definition: { table: "people", fields: ["firstname"] },
     });
 
     expect(result.valid).toBe(false);
@@ -36,7 +36,7 @@ describe("ReportValidator.validateDefinition", () => {
     const result = await ReportValidator.validateDefinition({
       name: "تقرير تجريبي",
       type: "sql",
-      definition: { table: "persons", fields: ["firstname"] },
+      definition: { table: "people", fields: ["firstname"] },
     });
 
     expect(result.valid).toBe(false);
@@ -61,7 +61,7 @@ describe("ReportValidator.validateDefinition", () => {
     const result = await ReportValidator.validateDefinition({
       name: "تقرير بلا حقول",
       type: "table",
-      definition: { table: "persons" },
+      definition: { table: "people" },
     });
 
     expect(result.valid).toBe(true);
@@ -74,17 +74,17 @@ describe("ReportValidator.sanitizeDefinition", () => {
   it("يزيل استعلام SQL الخطير ويضيف تحذيراً", () => {
     const cleaned = ReportValidator.sanitizeDefinition({
       sqlQuery: "SELECT * FROM persons; DELETE FROM users",
-      table: "persons",
+      table: "people",
     });
 
     expect(cleaned.sqlQuery).toBe("-- REMOVED: Potentially dangerous SQL");
-    expect(cleaned.table).toBe("persons");
+    expect(cleaned.table).toBe("people");
     expect(typeof cleaned.warning).toBe("string");
     expect(cleaned.warning).toContain("sanitized");
   });
 
   it("يحافظ على الاستعلام الآمن كما هو", () => {
-    const input = { sqlQuery: "SELECT id, firstname FROM persons", table: "persons" };
+    const input = { sqlQuery: "SELECT id, firstname FROM persons", table: "people" };
     const cleaned = ReportValidator.sanitizeDefinition(input);
 
     expect(cleaned.sqlQuery).toBe(input.sqlQuery);
