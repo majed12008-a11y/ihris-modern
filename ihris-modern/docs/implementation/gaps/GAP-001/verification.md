@@ -21,8 +21,8 @@
 | 1 | إنشاء تعريف تقرير جديد | يُحفظ ويظهر في القائمة | ✅ | `POST /api/reports` → 201، ثم `GET /api/reports/:id` → 200 بنفس الاسم والتعريف |
 | 2 | تشغيل تقرير بسيط | يُرجع نتائج صحيحة | ✅ | `POST /:id/execute` → 201، `rowCount: 3`، الصفوف: سالم/نورة/فهد من `people` |
 | 3 | تشغيل تقرير بمعاملات | يُرجع نتائج مصفاة | ✅ | `params: {name:"فهد"}` → `rowCount: 1` والصف `firstname = "فهد"` |
-| 4 | تصدير CSV | ملف صحيح | ✅ | `POST /:id/export?format=csv` → 200، `text/csv`، `X-Report-Row-Count: 3`، يحتوي `id,firstname,surname` و«سالم» |
-| 5 | تصدير PDF | ملف صحيح | ✅ | `POST /:id/export?format=pdf` → 200، `application/pdf`، البايتات الأولى `%PDF-`، الحجم > 500 بايت |
+| 4 | تصدير CSV | ملف صحيح | ✅ | `POST /:id/export?format=csv` → 200، `text/csv`، BOM (`U+FEFF`)، CRLF، `X-Report-Row-Count: 3`، يحتوي `id,firstname,surname` و«سالم» |
+| 5 | تصدير PDF | ملف صحيح | ✅ | `POST /:id/export?format=pdf` → 200، `application/pdf`، يبدأ بـ`%PDF-` وينتهي بـ`%%EOF`، الحجم > 500 بايت |
 | 6 | تشغيل تقرير بـ SQL ضار | يُرفض | ✅ | 5+ سيناريوهات رفض (انظر §3) |
 | 7 | مستخدم غير مخوّل | يُرفض | ✅ | بلا توكن → 401؛ بتوكن غير صالح → 401 |
 | 8 | تقرير بتعريف خاطئ | يُرجع خطأ واضحاً | ✅ | اسم مفقود → 400 مع `Validation failed` ورسالة `name` |

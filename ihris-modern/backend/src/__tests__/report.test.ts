@@ -179,9 +179,12 @@ describe("Reports API (integration — real DB)", () => {
     expect(res.status).toBe(200);
     expect(res.headers["content-type"]).toContain("text/csv");
     expect(res.headers["x-report-row-count"]).toBe("3");
+    // BOM في بداية الملف (UTF-8)
+    expect(res.text.charCodeAt(0)).toBe(0xfeff);
     expect(res.text).toContain("id,firstname,surname");
     expect(res.text).toContain("سالم");
     expect(res.text).toContain(TEST_SURNAME);
+    expect(res.text).toContain("\r\n");
   });
 
   it("يصدّر PDF صالحاً", async () => {
@@ -201,6 +204,8 @@ describe("Reports API (integration — real DB)", () => {
     expect(res.headers["content-type"]).toContain("application/pdf");
     expect(res.body.subarray(0, 5).toString()).toBe("%PDF-");
     expect(res.body.length).toBeGreaterThan(500);
+    // ملف PDF مكتمل ينتهي بعلامة EOF
+    expect(res.body.toString("latin1")).toContain("%%EOF");
   });
 
   it("يرفض إنشاء تقرير بتعريف خطير", async () => {
