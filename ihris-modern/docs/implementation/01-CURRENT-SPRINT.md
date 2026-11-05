@@ -16,7 +16,7 @@
 |-------|--------|-------|
 | 1. تناسق حالة GAP-001 | ✅ | "مكتمل جزئياً" في `verification.md`, `DASHBOARD.md`, ملحق `12-GAP-ANALYSIS.md`, وهذا الملف |
 | 2. محرك حقيقي أو تصنيف جزئي | ✅ (تصنيف) | اعتُرف صراحةً أن `ReportService.execute` هو stub |
-| 3. فرع Git + commits | ✅ | `feature/GAP-001-custom-reports` + 4 commits |
+| 3. فرع Git + commits | ✅ | `feature/GAP-001-custom-reports` + commits مرتبطة بـ `[GAP-001]` |
 | 4. rollback + ترحيل idempotent | ✅ | `001_create_report_tables_rollback.sql` + كل `CREATE` بـ `IF NOT EXISTS` |
 | 5. اختباران حقيقيان | ❌ | 7 اختبارات وحدة ناجحة فعلياً، لكن اختبار التكامل لم يُشغَّل (BLK-004 + BLK-005) |
 

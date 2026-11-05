@@ -52,8 +52,8 @@
 | 06-RISK-TRACKER.md | ⚠️ يحتاج إعادة تصنيف RISK-001 إلى "جزئي" |
 | 07-TEST-EVIDENCE.md | ✅ مصحّح بأدلة حقيقية |
 | gaps/GAP-001/verification.md | ✅ محدّث (حالة جزئية + سيناريوهات صادقة) |
-| gaps/GAP-001/implementation.md | ⚠️ يحتوي ادعاءات قديمة تحتاج مراجعة |
-| gaps/GAP-001/evidence.md | ⚠️ يحتوي ادعاءات اختبار قديمة |
+| gaps/GAP-001/implementation.md | ✅ مصحّح (حالة جزئية + تحذير في الأعلى) |
+| gaps/GAP-001/evidence.md | ✅ مصحّح (جدول قبول صادق، لا 16/16) |
 
 ## العوائق / نقاط تحتاج قرار
 

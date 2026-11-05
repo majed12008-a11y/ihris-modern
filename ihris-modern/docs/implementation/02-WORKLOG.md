@@ -78,7 +78,8 @@
 | 13:00 | محاولة اختبار التكامل | فشل: `node_modules` تالف + الترحيل غير مطبَّق | ❌ محجوب |
 | 13:30 | تصحيح 07-TEST-EVIDENCE | إزالة ادعاء 16/16 واستبداله بأدلة حقيقية | ✅ |
 | 14:00 | تحديث العوائق واللوحة | BLK-003/004/005 + إحصاءات صادقة | ✅ |
-| 14:30 | إنشاء الفرع والـ commits | `feature/GAP-001-custom-reports` + 4 commits | ✅ |
+| 14:30 | إنشاء الفرع والـ commits | `feature/GAP-001-custom-reports` + commits مرتبطة بـ `[GAP-001]` | ✅ |
+| 15:00 | توحيد حالة GAP-001 في كل الملفات | تصحيح README/implementation/evidence/MASTER-PLAN/15-EVIDENCE-MATRIX | ✅ |
 
 ## الخطوة التالية المقترحة
 

@@ -28,7 +28,7 @@
 |-------|--------|-------|
 | 1. تناسق حالة GAP-001 | ✅ | حُدِّثت إلى "مكتمل جزئياً" في verification/DASHBOARD/12-GAP-ANALYSIS |
 | 2. محرك حقيقي أو تصنيف جزئي | ✅ (تصنيف) | اعتُرف بأنه stub وصُنِّفت GAP-001 جزئية |
-| 3. فرع Git + commits | ✅ | `feature/GAP-001-custom-reports` مع 4 commits |
+| 3. فرع Git + commits | ✅ | `feature/GAP-001-custom-reports` مع commits مرتبطة بـ `[GAP-001]` |
 | 4. rollback + idempotent | ✅ | `001_create_report_tables_rollback.sql` + `IF NOT EXISTS` |
 | 5. اختباران حقيقيان | ❌ | 7 اختبارات وحدة ناجحة، لكن اختبار التكامل لم يُشغَّل (BLK-004 + BLK-005) |
 
