@@ -14,6 +14,7 @@ import Training from "@/pages/Training";
 import TrainingForm from "@/pages/TrainingForm";
 import Users from "@/pages/Users";
 import UserForm from "@/pages/UserForm";
+import DeletedUsers from "@/pages/DeletedUsers";
 import Reports from "@/pages/Reports";
 import ReportDetail from "@/pages/ReportDetail";
 import ReportForm from "@/pages/ReportForm";
@@ -67,6 +68,8 @@ export default function App() {
           <Route path="training/new" element={<TrainingForm />} />
           <Route path="users" element={<Users />} />
           <Route path="users/new" element={<UserForm />} />
+          <Route path="users/deleted" element={<DeletedUsers />} />
+          <Route path="users/:id/edit" element={<UserForm />} />
           <Route path="reports" element={<Reports />} />
           <Route path="reports/new" element={<ReportForm />} />
           <Route path="reports/:id" element={<ReportDetail />} />

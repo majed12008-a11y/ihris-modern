@@ -1,7 +1,10 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/services/api";
-import { Plus } from "lucide-react";
+import { useAuthStore } from "@/store/authStore";
+import { toast } from "sonner";
+import { Plus, Pencil, Trash2, UserX, AlertTriangle } from "lucide-react";
 
 interface UserRow {
   id: number;
@@ -10,6 +13,7 @@ interface UserRow {
   lastname: string;
   email: string;
   role: string;
+  version: number;
   createdAt: string;
 }
 
@@ -22,8 +26,14 @@ interface UserResponse {
 }
 
 export default function Users() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const currentUser = useAuthStore((state) => state.user);
+  const isAdmin = currentUser?.role === "admin";
+
   const [search, setSearch] = useState("");
-  const [showForm, setShowForm] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
+  const [reason, setReason] = useState("");
 
   const { data, isLoading, error } = useQuery<UserResponse>({
     queryKey: ["users", search],
@@ -32,6 +42,26 @@ export default function Users() {
       if (search) params.set("search", search);
       const res = await api.get(`/users?${params.toString()}`);
       return res.data;
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      if (!deleteTarget) return;
+      const res = await api.delete(`/users/${deleteTarget.id}`, {
+        data: { version: deleteTarget.version, reason },
+      });
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      toast.success("تم حذف المستخدم (حذف منطقي) بنجاح");
+      setDeleteTarget(null);
+      setReason("");
+    },
+    onError: (err: any) => {
+      const body = err.response?.data;
+      toast.error(body?.error || "فشل حذف المستخدم");
     },
   });
 
@@ -47,12 +77,13 @@ export default function Users() {
   }
 
   if (error) {
-    console.error("❌ Users error:", error);
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
         <div className="bg-white p-8 rounded-xl shadow border border-red-100 max-w-md text-center">
           <div className="text-red-600 font-bold mb-2">⚠️ حدث خطأ في تحميل البيانات</div>
-          <p className="text-gray-600 text-sm mb-4">{error instanceof Error ? error.message : String(error)}</p>
+          <p className="text-gray-600 text-sm mb-4">
+            {error instanceof Error ? error.message : String(error)}
+          </p>
           <button
             onClick={() => window.location.reload()}
             className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700"
@@ -72,12 +103,24 @@ export default function Users() {
           <p className="text-gray-600">إدارة الحسابات والصلاحيات في النظام</p>
         </div>
 
-        <button
-          onClick={() => setShowForm(true)}
-          className="bg-primary-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium hover:bg-primary-700 transition"
-        >
-          <Plus size={18} /> مستخدم جديد
-        </button>
+        <div className="flex gap-3">
+          {isAdmin && (
+            <button
+              onClick={() => navigate("/users/deleted")}
+              className="bg-white text-gray-700 border border-gray-300 px-4 py-2 rounded-lg flex items-center gap-2 font-medium hover:bg-gray-50 transition"
+            >
+              <UserX size={18} /> المستخدمون المحذوفون
+            </button>
+          )}
+          {isAdmin && (
+            <button
+              onClick={() => navigate("/users/new")}
+              className="bg-primary-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium hover:bg-primary-700 transition"
+            >
+              <Plus size={18} /> مستخدم جديد
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
@@ -98,143 +141,118 @@ export default function Users() {
               <th className="px-6 py-3 text-sm font-semibold text-gray-700">البريد الإلكتروني</th>
               <th className="px-6 py-3 text-sm font-semibold text-gray-700">الدور</th>
               <th className="px-6 py-3 text-sm font-semibold text-gray-700">تاريخ الإنشاء</th>
+              <th className="px-6 py-3 text-sm font-semibold text-gray-700">الإجراءات</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {(data?.data || []).map((row: UserRow) => (
-              <tr key={row.id} className="hover:bg-gray-50 transition">
-                <td className="px-6 py-4 font-mono text-sm">{row.username}</td>
-                <td className="px-6 py-4">{row.firstname} {row.lastname}</td>
-                <td className="px-6 py-4 text-gray-600 text-sm">{row.email}</td>
-                <td className="px-6 py-4">
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      row.role === "admin"
-                        ? "bg-red-100 text-red-700"
-                        : row.role === "hr_manager"
-                        ? "bg-blue-100 text-blue-700"
-                        : "bg-gray-100 text-gray-700"
-                    }`}
-                  >
-                    {row.role}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-gray-600 text-sm">
-                  {new Date(row.createdAt).toLocaleDateString("ar-SA")}
-                </td>
-              </tr>
-            ))}
+            {(data?.data || []).map((row: UserRow) => {
+              const canEdit = isAdmin || currentUser?.id === row.id;
+              const canDelete = isAdmin && currentUser?.id !== row.id;
+
+              return (
+                <tr key={row.id} className="hover:bg-gray-50 transition">
+                  <td className="px-6 py-4 font-mono text-sm">{row.username}</td>
+                  <td className="px-6 py-4">{row.firstname} {row.lastname}</td>
+                  <td className="px-6 py-4 text-gray-600 text-sm">{row.email}</td>
+                  <td className="px-6 py-4">
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        row.role === "admin"
+                          ? "bg-red-100 text-red-700"
+                          : row.role === "hr_manager"
+                          ? "bg-blue-100 text-blue-700"
+                          : "bg-gray-100 text-gray-700"
+                      }`}
+                    >
+                      {row.role}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-gray-600 text-sm">
+                    {new Date(row.createdAt).toLocaleDateString("ar-SA")}
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2">
+                      {canEdit && (
+                        <button
+                          onClick={() => navigate(`/users/${row.id}/edit`)}
+                          className="text-primary-600 hover:text-primary-800 p-1"
+                          title="تعديل"
+                        >
+                          <Pencil size={18} />
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button
+                          onClick={() => {
+                            setDeleteTarget(row);
+                            setReason("");
+                          }}
+                          className="text-red-600 hover:text-red-800 p-1"
+                          title="حذف"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
 
       {!data?.data?.length && (
-        <div className="text-center py-12 text-gray-500">
-          لا توجد بيانات مستخدمين متاحة
-          <button
-            onClick={() => setShowForm(true)}
-            className="mt-4 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700"
-          >
-            إضافة مستخدم أول
-          </button>
-        </div>
+        <div className="text-center py-12 text-gray-500">لا توجد بيانات مستخدمين متاحة</div>
       )}
 
-      {/* نموذج إضافة مستخدم */}
-      {showForm && (
+      {/* Modal تأكيد الحذف مع إدخال السبب */}
+      {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 m-4">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-gray-800">إضافة مستخدم جديد</h2>
+            <div className="flex items-start gap-3 mb-4">
+              <div className="bg-red-100 text-red-600 p-2 rounded-full">
+                <AlertTriangle size={22} />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-800">حذف المستخدم</h2>
+                <p className="text-gray-600 text-sm mt-1">
+                  سيتم حذف <span className="font-mono font-bold">{deleteTarget.username}</span>{" "}
+                  حذفاً منطقياً، ويمكن استعادته خلال 30 يوماً.
+                </p>
+              </div>
+            </div>
+
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              سبب الحذف *
+            </label>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={3}
+              maxLength={500}
+              placeholder="اكتب سبب حذف الحساب..."
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+            />
+            <p className="text-xs text-gray-500 mt-1">{reason.length}/500</p>
+
+            <div className="flex gap-3 pt-4 mt-2 border-t border-gray-100">
               <button
-                onClick={() => setShowForm(false)}
-                className="text-gray-400 hover:text-gray-600"
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                className="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg font-medium hover:bg-gray-200 transition"
               >
-                ✕
+                إلغاء
+              </button>
+              <button
+                type="button"
+                disabled={deleteMutation.isPending || reason.trim().length === 0}
+                onClick={() => deleteMutation.mutate()}
+                className="bg-red-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-red-700 disabled:opacity-60 transition"
+              >
+                {deleteMutation.isPending ? "جاري الحذف..." : "تأكيد الحذف"}
               </button>
             </div>
-            <form className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    اسم المستخدم *
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    كلمة المرور *
-                  </label>
-                  <input
-                    type="password"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    الاسم الأول *
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    اسم العائلة *
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                    required
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    البريد الإلكتروني
-                  </label>
-                  <input
-                    type="email"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    الدور *
-                  </label>
-                  <select
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                  >
-                    <option value="admin">مسؤول النظام</option>
-                    <option value="hr_manager">مدير الموارد البشرية</option>
-                    <option value="hr_staff">موظف موارد بشرية</option>
-                    <option value="training_manager">مدير التدريب</option>
-                    <option value="exec_manager">مدير تنفيذي</option>
-                  </select>
-                </div>
-              </div>
-              <div className="flex gap-3 pt-4 border-t border-gray-100">
-                <button
-                  type="button"
-                  onClick={() => setShowForm(false)}
-                  className="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg font-medium hover:bg-gray-200 transition"
-                >
-                  إلغاء
-                </button>
-                <button
-                  type="submit"
-                  className="bg-primary-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-primary-700 transition"
-                >
-                  حفظ المستخدم
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}

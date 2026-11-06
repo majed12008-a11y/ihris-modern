@@ -8,6 +8,7 @@ import {
   BookOpen,
   Shield,
   Settings,
+  UserX,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 
@@ -17,13 +18,28 @@ const navigation = [
   { name: "الوظائف", path: "/positions", icon: Briefcase },
   { name: "الرواتب", path: "/salaries", icon: CreditCard },
   { name: "التدريب", path: "/training", icon: BookOpen },
-  { name: "المستخدمون", path: "/users", icon: Shield },
-  { name: "الإعدادات", path: "/settings", icon: Settings },
 ];
+
+const settingsItem = { name: "الإعدادات", path: "/settings", icon: Settings };
 
 export default function MainLayout() {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
+
+  const isAdmin = user?.role === "admin";
+  const canListUsers = isAdmin || user?.role === "hr_manager";
+
+  const items = [...navigation];
+  if (canListUsers) {
+    items.push({ name: "المستخدمون", path: "/users", icon: Shield });
+  } else if (user) {
+    // المستخدم العادي يصل إلى تعديل بياناته الشخصية مباشرة (self-edit)
+    items.push({ name: "ملفي الشخصي", path: `/users/${user.id}/edit`, icon: Shield });
+  }
+  if (isAdmin) {
+    items.push({ name: "المستخدمون المحذوفون", path: "/users/deleted", icon: UserX });
+  }
+  items.push(settingsItem);
 
   const handleLogout = () => {
     logout();
@@ -54,7 +70,7 @@ export default function MainLayout() {
         <aside className="w-64 bg-white shadow h-[calc(100vh-60px)] fixed rtl:right-0 ltr:left-0 z-50">
           <div className="p-4">
             <ul className="space-y-1">
-              {navigation.map((item) => {
+              {items.map((item) => {
                 const Icon = item.icon;
                 const isActive = currentPath === item.path;
                 return (
