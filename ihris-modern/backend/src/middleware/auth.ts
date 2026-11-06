@@ -1,8 +1,14 @@
 import { Request, Response, NextFunction } from "express";
 import { extractTokenFromHeader, verifyToken } from "../lib/jwt";
 
+export interface AuthUser {
+  userId: number;
+  username: string;
+  role: string;
+}
+
 export interface AuthRequest extends Request {
-  user?: { userId: number; username: string; role: string };
+  user?: AuthUser;
 }
 
 export function authenticate(req: AuthRequest, res: Response, next: NextFunction): void {

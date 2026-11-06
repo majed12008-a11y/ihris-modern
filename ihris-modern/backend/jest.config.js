@@ -11,4 +11,6 @@ module.exports = {
   // Prisma/supertest يتركان handles مفتوحة، ما يمنع Jest من الخروج بعد انتهاء الاختبارات
   forceExit: true,
   testTimeout: 30000,
+  // قاعدة الاختبار واحدة مشتركة: منع التوازي لتجنّب تداخل deleteMany بين suites
+  maxWorkers: 1,
 };
