@@ -31,7 +31,8 @@ export class AuthService {
       include: { access: { include: { role: true } } },
     });
 
-    if (!user) {
+    // ADR-003: المستخدم المحذوف منطقياً لا يستطيع تسجيل الدخول (401 عام بلا كشف)
+    if (!user || user.deletedAt) {
       throw unauthorized();
     }
 

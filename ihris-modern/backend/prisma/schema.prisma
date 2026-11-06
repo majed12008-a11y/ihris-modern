@@ -25,6 +25,13 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // ADR-003: Optimistic Lock + Soft Delete
+  version        Int       @default(1)
+  deletedAt      DateTime?
+  deletedBy      Int?
+  deletionReason String?   @db.Text
+  restoredAt     DateTime?
+
   access    UserAccess[]
   person    Person?  @relation(fields: [personId], references: [id])
   personId  Int?     @unique
@@ -33,7 +40,27 @@ model User {
   reportExecutions  ReportExecution[]  @relation("ReportExecutionRunner")
   reportPreferences ReportPreference[] @relation("ReportPreferenceUser")
 
+  @@index([deletedAt])
   @@map("users")
+}
+
+// ADR-003: سجل تدقيق عمليات المستخدمين (create/update/delete/restore)
+// بلا علاقة FK إلى users عمداً حتى يبقى السجل بعد أي purge نهائي (P3).
+// لا تُكتب كلمة المرور أو hashها في oldValues/newValues مطلقاً.
+model UserAuditLog {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  action      String   @db.VarChar(20)
+  changedBy   Int
+  changedAt   DateTime @default(now())
+  oldValues   Json?
+  newValues   Json?
+  reason      String?  @db.Text
+
+  @@index([userId, changedAt(sort: Desc)])
+  @@index([action])
+  @@index([changedAt])
+  @@map("user_audit_log")
 }
 
 model Role {
