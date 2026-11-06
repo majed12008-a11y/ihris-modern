@@ -207,6 +207,8 @@ model Facility {
   countyId    Int?
   countryId   Int?
   regionId    Int?
+  // ADR-006: قفل تفاؤلي لتعديل المنشأة
+  version     Int       @default(1)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -217,7 +219,26 @@ model Facility {
   country     Country?    @relation(fields: [countryId], references: [id])
   region      Region?     @relation(fields: [regionId], references: [id])
 
+  @@index([name])
   @@map("facilities")
+}
+
+// ADR-006: سجل تدقيق عمليات المنشآت (create/update/delete)
+// بلا FK إلى facilities عمداً: الحذف فيزيائي ويجب أن يبقى السجل بعده.
+model FacilityAuditLog {
+  id         Int      @id @default(autoincrement())
+  facilityId Int
+  action     String   @db.VarChar(20)
+  changedBy  Int
+  changedAt  DateTime @default(now())
+  oldValues  Json?
+  newValues  Json?
+  reason     String?  @db.Text
+
+  @@index([facilityId, changedAt(sort: Desc)])
+  @@index([action])
+  @@index([changedAt])
+  @@map("facility_audit_log")
 }
 
 model Salary {
@@ -922,4 +943,3 @@ model ReportPreference {
   @@unique([userId, reportDefinitionId])
   @@map("report_preferences")
 }
-
