@@ -1,6 +1,6 @@
-# أدلة الاختبار — GAP-001 (نظام التقارير المخصص)
+# أدلة الاختبار — GAP-001 + GAP-002/GAP-003
 
-> آخر تحديث: 05 نوفمبر 2026 — Sprint 1.5b + 1.5c.
+> آخر تحديث: 05–06 نوفمبر 2026 — Sprint 1.5b/1.5c + Sprint 2.
 > كل رقم أدناه مأخوذ من تشغيل فعلي، لا من تقدير.
 
 ## 1. تصحيح تاريخي
@@ -15,9 +15,9 @@
 | قاعدة البيانات | `ihris_test_gap001` (عبر `DATABASE_URL` لهذا التشغيل فقط) |
 | Node | 25.9.0 |
 | Jest | 29.7.0 + ts-jest |
-| إعداد Jest | `forceExit: true`, `testTimeout: 30000` |
+| إعداد Jest | `forceExit: true`, `testTimeout: 30000`, `maxWorkers: 1` |
 
-## 3. Backend — 42/42 ✅
+## 3. Backend — 73/73 ✅
 
 الأمر:
 
@@ -26,18 +26,21 @@ DATABASE_URL=postgresql://ihris:***@localhost:5432/ihris_test_gap001 \
 npx jest --runInBand
 ```
 
-المخرج الفعلي:
+المخرج الفعلي (بعد Sprint 2):
 
 ```text
-PASS src/__tests__/report.test.ts (5.836 s)
-PASS src/__tests__/position.test.ts
+PASS src/__tests__/user.test.ts (11.99 s)
+PASS src/__tests__/report.test.ts
+PASS src/__tests__/user.security.test.ts
 PASS src/__tests__/auth.test.ts
 PASS src/__tests__/person.test.ts
+PASS src/__tests__/position.test.ts
+PASS src/__tests__/user.validation.test.ts
 PASS src/__tests__/report.engine.test.ts
 PASS src/__tests__/report.validation.test.ts
 
-Test Suites: 6 passed, 6 total
-Tests:       42 passed, 42 total
+Test Suites: 9 passed, 9 total
+Tests:       73 passed, 73 total
 ```
 
 ### 3.1 محرك التقارير — 12/12
@@ -79,6 +82,49 @@ Tests:       42 passed, 42 total
 ```text
 PASS src/__tests__/report.validation.test.ts
 Tests: 7 passed, 7 total
+```
+
+### 3.4 GAP-002/003 — سيناريوهات القبول 12/12
+
+```text
+PASS src/__tests__/user.test.ts
+  GAP-002 — تعديل مستخدم
+  √ 1) المستخدم يعدّل بياناته الشخصية → 200 + تحديث + audit
+  √ 2) Admin يعدّل بيانات أي مستخدم → 200 + تحديث + audit
+  √ 3) مستخدم عادي يحاول تعديل آخر → 403 مرفوض
+  √ 4) تعديل ببريد غير صالح → 400 + رسالة واضحة
+  √ 5) تعديل بـ version خاطئ → 409 Conflict
+  GAP-003 — حذف/استعادة مستخدم
+  √ 6) Admin يحذف مستخدماً بلا سجلات → 200 + soft delete + audit
+  √ 7) Admin يحذف مستخدماً له سجلات مرتبطة → 422 + رسالة واضحة
+  √ 8) المستخدم يحاول حذف نفسه → 403 مرفوض
+  √ 9) مستخدم عادي يحاول حذف آخر → 403 مرفوض
+  √ 10) Admin يستعيد مستخدماً محذوفاً خلال 30 يوماً → 200 + restoredAt + audit
+  √ 11) Admin يستعيد مستخدماً بعد أكثر من 30 يوماً → 422
+  √ 12) المستخدم المحذوف لا يستطيع تسجيل الدخول → 401
+```
+
+### 3.5 اختبارات الأمان — 10/10
+
+```text
+PASS src/__tests__/user.security.test.ts
+  √ S1) JWT مستخدم عادي على endpoint إداري → 403
+  √ S2) تعديل deletedAt مباشرة → 400
+  √ S3) تعديل version من الـ API → 409 ولا تُكتب القيمة
+  √ S4) حذف بلا auth → 401
+  √ S5) استعادة بلا auth → 401
+  √ S6) SQL injection في deletion_reason → نص آمن والجداول سليمة
+  √ S7) Mass assignment → 400
+  √ S8) IDOR → 403
+  √ S9) تصعيد الصلاحيات (role=admin) → 403
+  √ S10) Audit بلا password/hash
+```
+
+### 3.6 اختبارات وحدة التحقق — 9/9
+
+```text
+PASS src/__tests__/user.validation.test.ts
+Tests: 9 passed, 9 total
 ```
 
 ## 4. Frontend — 3/3 ✅
@@ -125,10 +171,11 @@ ROWS: الجمهورية اليمنية / مصر / السعودية / الإما
 
 | الفئة | العدد | ناجح | فاشل |
 |-------|-------|-------|------|
-| Backend | 42 | 42 | 0 |
+| Backend (Sprint 1.5 + Sprint 2) | 73 | 73 | 0 |
 | Frontend | 3 | 3 | 0 |
-| **الإجمالي** | **45** | **45** | **0** |
+| **الإجمالي** | **76** | **76** | **0** |
 | TypeScript | 2 مشروع | 2 | 0 |
+| ترحيل 002 (idempotency/rollback) | 4 خطوات | 4 | 0 |
 
 ## 9. قيود الاختبار
 

@@ -213,12 +213,12 @@
 
 ### 3.1 الحالة
 
-**مقبول وملزم — قرار بشري ثابت، لا يُعاد الاجتهاد فيه.**
+**منفذ (Sprint 2) — قرار بشري ثابت، لا يُعاد الاجتهاد فيه.**
 
 > نطاق التنفيذ: هذه السياسة تحكم GAP-002 (تعديل مستخدم) وGAP-003 (حذف مستخدم).
-> لم يُنفَّذ أي كود لإدارة المستخدمين في Sprint 1.5b/1.5c لأن Sprint 2 لم يبدأ
-> (شرط: إغلاق GAP-001 بالكامل أولاً). السياسة مُسجَّلة هنا لتكون مرجعاً إلزامياً
-> عند بدء Sprint 2.
+> نُفِّذت بالكامل في Sprint 2 (فرع `feature/GAP-002-003-user-management`) بعد إغلاق
+> GAP-001. التفاصيل التنفيذية في 3.5 وما بعدها، وقد اجتازت بوابة 3.6:
+> 12/12 سيناريو قبول + 10/10 أمان + regression 73/73 backend + 3/3 frontend.
 
 ### 3.2 القرارات
 
@@ -256,6 +256,110 @@
 | Hard Delete كما في النظام القديم | يفقد قابلية الاستعادة والتدقيق |
 | حذف المستخدم مع سجلاته (Cascade) | يدمر تاريخ الموارد البشرية |
 | Soft delete بدون audit | لا يلبي متطلبات التتبع |
+
+### 3.5 التفاصيل التنفيذية (Sprint 2)
+
+#### 3.5.1 أعمدة Soft Delete وOptimistic Lock على `users`
+
+| العمود (Prisma / PostgreSQL) | النوع | NULL | الافتراضي | الغرض |
+|------------------------------|-------|------|-----------|-------|
+| `version` | `INTEGER` | NO | `1` | Optimistic Lock — يزداد بمقدار 1 مع كل كتابة ناجحة |
+| `deletedAt` | `TIMESTAMP` | YES | `NULL` | وقت الحذف المنطقي (`NULL` = غير محذوف) |
+| `deletedBy` | `INTEGER` | YES | `NULL` | `userId` للمنفّذ (admin) |
+| `deletionReason` | `TEXT` | YES | `NULL` | سبب الحذف (1..500 حرف) |
+| `restoredAt` | `TIMESTAMP` | YES | `NULL` | وقت آخر استعادة (مطلوب لسيناريو القبول #10) |
+
+> ملاحظة تسمية: قاعدة البيانات الحالية تستخدم camelCase بدون `@map` (مثل `createdAt`،
+> `creatorId`)، لذلك أعمدة السياسة `deleted_at/deleted_by/deletion_reason` تُنفَّذ
+> فعلياً كـ `deletedAt/deletedBy/deletionReason` مع تطابق كامل في المعنى. الـ API
+> يعيد `deletedAt` و`restoredAt` (نفس نمط `createdAt`).
+
+الفهارس: `idx_users_deleted_at` على `("deletedAt")`.
+
+#### 3.5.2 جدول `user_audit_log`
+
+| العمود | النوع | NULL | الافتراضي | ملاحظة |
+|--------|-------|------|-----------|--------|
+| `id` | `SERIAL` | NO | auto | PRIMARY KEY |
+| `userId` | `INTEGER` | NO | — | المستخدم المتأثر (بلا FK: يبقى السجل بعد purge نهائي في P3) |
+| `action` | `VARCHAR(20)` | NO | — | `create` \| `update` \| `delete` \| `restore` (CHECK) |
+| `changedBy` | `INTEGER` | NO | — | المنفّذ (admin أو المستخدم نفسه) |
+| `changedAt` | `TIMESTAMP` | NO | `NOW()` | وقت العملية |
+| `oldValues` | `JSONB` | YES | `NULL` | القيم قبل العملية (بلا كلمة المرور أبداً) |
+| `newValues` | `JSONB` | YES | `NULL` | القيم بعد العملية (بلا كلمة المرور أبداً) |
+| `reason` | `TEXT` | YES | `NULL` | سبب الحذف/التعطيل |
+
+الفهارس: `idx_user_audit_log_user_changed` على `("userId", "changedAt" DESC)`،
+`idx_user_audit_log_action` على `("action")`، `idx_user_audit_log_changed_at`
+على `("changedAt")`.
+
+**قاعدة صارمة:** لا تُكتب `password` أو أي hash في `oldValues/newValues` مطلقاً.
+
+#### 3.5.3 استراتيجية `version`
+
+1. `version` يبدأ بـ 1 ولا يُرسَل ضمن بيانات التعديل كقيمة تُكتب.
+2. كل `PUT` و`DELETE` و`POST /:id/restore` يتطلب `version` (عدد صحيح ≥ 1).
+3. التحديث يتم بـ `UPDATE ... WHERE id = ? AND version = ?` داخل معاملة؛
+   إن كان عدد الصفوف المتأثرة = 0 → **409 Conflict** وليس كتابة عمياء.
+4. عند النجاح: `version = version + 1` مرة واحدة فقط.
+5. حقول `version` و`deletedAt/deletedBy/deletionReason/restoredAt` **مرفوضة**
+   كمدخلات تعديل (mass assignment) حتى لو أرسلها العميل.
+
+#### 3.5.4 كشف "السجلات المرتبطة" — القرار: A + B
+
+| الخيار | القرار | التبرير بعد فحص FK |
+|--------|--------|--------------------|
+| **A — فحص مسبق** | ✅ **مختار** | استعلام واحد على `report_definitions.createdBy` و`report_executions.executedBy` يعطي رسالة عربية دقيقة (422) تحوي أسماء/أعداد السجلات وتقترح التعطيل. |
+| **B — قيد قاعدة البيانات** | ✅ **مختار كشبكة أمان** | القيود الحالية على الجدولين هي `NO ACTION` وهي ترفض الحذف الفيزيائي عند وجود صفوف مرجعية. لا نستخدم `CASCADE` ولا نحذف السجلات. |
+| C — دالة `hasRelatedRecords` قابلة للصيانة | ❌ | تكرار منطق A دون قيمة إضافية؛ A هو التنفيذ الفعلي للدالة. |
+
+**جداول لا تمنع الحذف:** `user_access` (دور المستخدم) و`report_preferences`
+(تفضيلات شخصية) — بيانات ملكية داخلية، وتُنظَّف فقط عند purge النهائي (P3).
+
+#### 3.5.5 مصفوفة الصلاحيات
+
+| العملية | admin | مستخدم عادي | غير مصادَق |
+|---------|-------|-------------|-------------|
+| عرض قائمة المستخدمين | ✅ | ❌ (كما هو حالياً: admin/hr_manager) | 401 |
+| عرض مستخدم واحد | ✅ أي مستخدم | ✅ نفسه فقط (غير ذلك 403) | 401 |
+| تعديل | ✅ أي مستخدم (بما فيهم نفسه) | ✅ نفسه فقط (غير ذلك 403) | 401 |
+| تغيير الدور | ✅ فقط | ❌ 403 (حتى لنفسه — منع تصعيد الصلاحيات) | 401 |
+| حذف | ✅ أي مستخدم **عدا نفسه** | ❌ (403، بما في ذلك نفسه) | 401 |
+| استعادة | ✅ فقط | ❌ 403 | 401 |
+| قائمة المحذوفين | ✅ فقط | ❌ 403 | 401 |
+
+**Self-delete ممنوع دائماً** — حتى للـ admin (403).
+
+#### 3.5.6 عقد الـ API
+
+| الطريقة | المسار | الصلاحية | المدخلات | النجاح |
+|---------|--------|----------|----------|--------|
+| `GET` | `/api/users/:id` | self أو admin | — | 200 + بيانات المستخدم + `version` |
+| `PUT` | `/api/users/:id` | self أو admin | `version`, `firstname?`, `lastname?`, `email?`, `role?` (admin فقط) | 200 + audit `update` |
+| `DELETE` | `/api/users/:id` | admin فقط، ليس نفسه | `version`, `reason` (1..500) | 200 + soft delete + audit `delete` |
+| `POST` | `/api/users/:id/restore` | admin فقط | `version` | 200 + `restoredAt` + audit `restore` |
+| `GET` | `/api/users/deleted` | admin فقط | `page?`, `limit?` | 200 + قائمة المحذوفين + `daysRemaining` |
+| `POST` | `/api/users` | admin فقط | الحقول الحالية | 201 + audit `create` |
+
+- أي حقل غير معروف في `PUT`/`DELETE`/`restore` → **400** (رفض mass assignment).
+- `version` غير مطابق → **409**.
+- بريد غير صالح → **400** برسالة واضحة.
+- وجود سجلات مرتبطة → **422** برسالة واضحة.
+- استعادة بعد 30 يوماً → **422** "انتهت فترة الاستعادة".
+- محاولة تسجيل دخول مستخدم محذوف → **401** (رسالة عامة بلا كشف).
+
+#### 3.5.7 نافذة الاستعادة
+
+`restore` مسموح إذا كان `deletedAt >= NOW() - INTERVAL '30 days'`؛ وإلا 422.
+`purge` النهائي بعد 90 يوماً **غير منفَّذ** (P3) ولا يوجد أي مسار أو مهمة له.
+
+### 3.6 البوابة قبل اعتبار ADR-003 "منفذاً"
+
+1. 12/12 سيناريو قبول ناجح على API حقيقي (`ihris_test_gap001`).
+2. 8/8 اختبارات أمان (403/401/409/400/422 + SQL injection + mass assignment + IDOR).
+3. Regression: backend 42 + frontend 3 + GAP-001 integration 12 ناجحة.
+4. Migration idempotent + rollback مُختبر.
+5. لا تعديل على `ihris_manage` ولا على `DB export.sql`.
 
 ---
 

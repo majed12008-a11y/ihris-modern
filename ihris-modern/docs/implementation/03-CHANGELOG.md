@@ -1,5 +1,33 @@
 # سجل التغييرات (Changelog)
 
+## [0.4.0] - 05 نوفمبر 2026 — Sprint 2 (إغلاق GAP-002 + GAP-003)
+
+### أُغلق
+- **GAP-002**: ✅ مكتملة — تعديل ذاتي + admin، تحقق Zod، Optimistic Lock، Audit، واجهة تعديل.
+- **GAP-003**: ✅ مكتملة — Soft Delete + Restore خلال 30 يوماً + سجل تدقيق + صفحة محذوفين.
+- **RISK-002** و**RISK-003**: ✅ مغلقتان في `06-RISK-TRACKER.md`.
+
+### أضيف
+- ترحيل `002_user_soft_delete_and_audit.sql` — `version` + `deletedAt/deletedBy/deletionReason/restoredAt` + `user_audit_log` + فهارس.
+- ملف Rollback مطابق + إثبات idempotency وإعادة التطبيق.
+- `UserService.getById/update/softDelete/restore/listDeleted/relatedRecordCounts`.
+- مخططات Zod صارمة في `user.validation.ts` + أخطاء HTTP موحدة في `lib/httpError.ts`.
+- مسارات: `GET /api/users/:id`, `PUT /api/users/:id`, `DELETE /api/users/:id`, `POST /api/users/:id/restore`, `GET /api/users/deleted`.
+- حظر تسجيل دخول المستخدم المحذوف (401).
+- واجهة: صفحة تعديل مستخدم + ملف شخصي، Modal حذف بسبب، صفحة المستخدمين المحذوفين + استعادة.
+- اختبارات: 12 سيناريو قبول + 10 أمان + 9 وحدة (31 اختباراً جديداً).
+
+### صُحِّح
+- `GET /api/users` يستثني المحذوفين منطقياً.
+- `POST /api/users/:id/role` أصبح يتطلب `version` ويكتب audit (مسار قديم deprecated).
+- `jest.config.js`: `maxWorkers: 1` لمنع تداخل `deleteMany` بين suites على قاعدة اختبار واحدة.
+
+### ملاحظات
+- Purge بعد 90 يوماً مؤجل P3.
+- `user_log` (login/logout/activity) مفقود — BLK-007 خارج النطاق.
+- لا آلية تعطيل `isActive` — BLK-008 يحتاج قراراً.
+- JWT قديم لا يُبطَل فور الحذف/تغيير الدور.
+
 ## [0.3.0] - 05 نوفمبر 2026 — Sprint 1.5b + 1.5c (إغلاق GAP-001)
 
 ### أُغلق

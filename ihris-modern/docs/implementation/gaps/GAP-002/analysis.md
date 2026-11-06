@@ -58,3 +58,42 @@
 |-------------|--------|-------|
 | EVID-101 | نموذج `User` | تعريف النموذج في ملف Prisma schema |
 | EVID-154 | مسار API `/api/persons` | تعريف المسار في ملف المسارات (كمثال على هيكل API الموجود) |
+
+---
+
+## 9. الحالة الفعلية (Sprint 2 — المرحلة 1)
+
+> فُحص الكود الفعلي وقاعدة `ihris_test_gap001` بتاريخ 05 نوفمبر 2026.
+
+### 9.1 ما الموجود فعلاً في النظام الحديث؟
+
+| العنصر | الموجود | التفاصيل |
+|--------|---------|----------|
+| API تعديل بيانات المستخدم | ❌ **غير موجود** | لا يوجد `PUT /api/users/:id`. الموجود فقط `POST /api/users/:id/role` لتغيير الدور، ولا يعدّل الاسم/البريد/كلمة المرور. |
+| API تعديل الدور | ✅ موجود (جزئي) | `POST /:id/role` → `UserService.updateRole()` يستخدم `upsert` على `user_access`. لا يتحقق من `version`، ولا يكتب audit. |
+| واجهة التعديل | ❌ **غير موجودة** | `Users.tsx` جدول للعرض فقط بلا أزرار إجراءات. `UserForm.tsx` للإنشاء فقط، والـ modal داخل `Users.tsx` غير موصول بأي mutation. |
+| التحقق من المدخلات | ❌ **غير موجود** | `UserController.create/updateRole` تمرّر `req.body` مباشرة إلى الخدمة. لا Zod ولا express-validator في مسار المستخدمين. |
+| الصلاحيات | ⚠️ جزئية | `authenticate` (JWT) + `requireRole` موجودان. `GET /` لـ admin/hr_manager، `POST /` و`POST /:id/role` لـ admin فقط. **لا يوجد** `requireSelfOrAdmin`، ولا منطق ملكية الصف (IDOR). |
+| Audit | ❌ **غير موجود** | لا جدول `user_audit_log`، ولا أي كتابة تدقيق في `UserService.create/updateRole`. |
+| Optimistic Lock | ❌ **غير موجود** | لا عمود `version` على `users`. |
+
+### 9.2 القيود على حذف/تعديل مستخدم له سجلات مرتبطة
+
+| الجدول | العمود | قاعدة الحذف الحالية | التصنيف |
+|--------|--------|---------------------|---------|
+| `user_access` | `userId` | `CASCADE` | ملكية داخلية للمستخدم (دور) — لا تمنع الحذف |
+| `report_preferences` | `userId` | `CASCADE` | تفضيلات شخصية — لا تمنع الحذف |
+| `report_definitions` | `createdBy` | `NO ACTION` | **سجل عمل** — يمنع الحذف |
+| `report_executions` | `executedBy` | `NO ACTION` | **سجل عمل** — يمنع الحذف |
+
+لا توجد مفاتيح خارجية أخرى إلى `users` (تم التحقق عبر `information_schema`).
+ملاحظة: `users.personId` علاقة من `users` إلى `people` وليست عكسية.
+
+### 9.3 هل `user_log` القديم منقول للحديث؟
+
+❌ **مفقود بالكامل**. لا يوجد جدول `user_log` ولا أي جدول مكافئ لتتبع login/logout/activity في `ihris_test_gap001` (الجداول التي تطابق `%user%` هي `users` و`user_access` فقط).
+هذه **فجوة منفصلة** عن GAP-002/GAP-003: سُجّلت في `05-BLOCKERS.md` (BLK-007) ومرتبطة بالمخاطرة `RISK-013`، **ولن تُعالج في Sprint 2** (خارج النطاق).
+
+### 9.4 الاستنتاج
+
+GAP-002 ليست "UI مفقود فقط" كما كان موصوفاً سابقاً: **الـ API نفسه غير موجود**، والتحقق والصلاحيات الذاتية والـ audit والـ version كلها مفقودة. لذلك النطاق الفعلي = backend + validation + authorization + audit + UI.

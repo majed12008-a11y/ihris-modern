@@ -1,24 +1,26 @@
-# Sprint الحالي — Sprint 1.5b + 1.5c (إصلاح البنية + محرك التقارير)
+# Sprint الحالي — Sprint 2 (GAP-002 + GAP-003)
 
 ## معلومات Sprint
 
 | البند | القيمة |
 |-------|--------|
-| الاسم | Sprint 1.5b (إصلاح البنية) + Sprint 1.5c (محرك تقارير حقيقي) |
-| التاريخ | 05 نوفمبر 2026 |
-| الحالة | ✅ **مكتمل — بوابة 1.5b اجتُزت، ومحرك 1.5c يعمل** |
+| الاسم | Sprint 2 — إدارة المستخدمين (تعديل + حذف/استعادة) |
+| التاريخ | 05–06 نوفمبر 2026 |
+| الحالة | ✅ **مكتمل — GAP-002 وGAP-003 مغلقتان** |
 | reviewer | Lead Implementation Engineer |
-| الهدف | إغلاق GAP-001 بالكامل قبل Sprint 2 |
+| الفرع | `feature/GAP-002-003-user-management` |
+| الهدف | إغلاق GAP-002/GAP-003 وفق ADR-003 حرفياً |
 
-## نتيجة بوابة Sprint 1.5b
+## نتيجة بوابة Sprint 2
 
 | البند | الحالة | الدليل |
 |-------|--------|--------|
-| 1. `npm ls --depth=0` نظيف (backend + frontend) | ✅ | backend 25 حزمة جذرية، frontend 21 |
-| 2. `report.test.ts` نُفِّذ فعلياً | ✅ | 12/12 ناجح |
-| 3. Regression 100% | ✅ | 42 backend + 3 frontend |
-| 4. `ihris_test_gap001` موجودة وسليمة | ✅ | 53 جدولاً + 3 جداول تقارير |
-| 5. الترحيل مسجّل | ✅ | `migrations/applied/README.md` |
+| 1. 12/12 سيناريو قبول | ✅ | `gaps/GAP-002/verification.md` + `gaps/GAP-003/verification.md` |
+| 2. اختبارات الأمان | ✅ 10/10 | `user.security.test.ts` |
+| 3. Regression | ✅ 73 backend + 3 frontend | `07-TEST-EVIDENCE.md` |
+| 4. Migration idempotent + rollback | ✅ | `applied/README.md` (002) |
+| 5. قاعدة الاختبار محفوظة | ✅ | `ihris_test_gap001` + تنويه في `applied/README.md` |
+| 6. `ihris_manage` لم تُمسّ | ✅ | كل الأوامر على قاعدة الاختبار |
 
 **الخلاصة: البوابة اجتُزت ✅.**
 
@@ -26,37 +28,24 @@
 
 | معرف | العنوان | الحالة | الملاحظة |
 |-------|---------|--------|----------|
-| GAP-001 | إنشاء تقرير مخصص | ✅ **مكتملة** | محرك حقيقي + 10/10 سيناريوهات |
-| GAP-002 | تعديل مستخدم | ⏳ لم يبدأ | وفق ADR-003 عند بدء Sprint 2 |
-| GAP-003 | حذف مستخدم | ⏳ لم يبدأ | وفق ADR-003 عند بدء Sprint 2 |
+| GAP-001 | إنشاء تقرير مخصص | ✅ **مكتملة** | محرك حقيقي + 10/10 |
+| GAP-002 | تعديل مستخدم | ✅ **مكتملة** | 5/5 + version + audit + UI |
+| GAP-003 | حذف مستخدم | ✅ **مكتملة** | 7/7 + soft delete + restore + UI |
 
-## ما أُنجز في Sprint 1.5b
-
-| # | المهمة | الحالة |
-|---|--------|--------|
-| 1 | نسخ احتياطي لملفات القفل | ✅ |
-| 2 | `npm ci` backend (521 حزمة) | ✅ |
-| 3 | `npm ci` frontend (265 حزمة) | ✅ |
-| 4 | إضافة `jest-util@^29.7.0` (تبعية peer مفقودة) | ✅ |
-| 5 | `pg_dump` لقاعدة `ihris_manage` | ✅ 152,671 بايت |
-| 6 | إنشاء `ihris_test_gap001` + استعادة | ✅ 53 جدولاً |
-| 7 | تطبيق الترحيل + تسجيله | ✅ |
-| 8 | اختبار rollback + idempotency | ✅ |
-| 9 | إصلاح regression (auth/person/position/frontend) | ✅ |
-
-## ما أُنجز في Sprint 1.5c
+## ما أُنجز في Sprint 2
 
 | # | المهمة | الحالة |
 |---|--------|--------|
-| 1 | ADR-004 (تصميم المحرك) | ✅ |
-| 2 | `report.whitelist.ts` | ✅ 25 جدولاً + حظر `password` |
-| 3 | `report.engine.ts` (build/execute) | ✅ SQL مُعامَل |
-| 4 | GROUP BY / ORDER BY / aggregates | ✅ |
-| 5 | تصدير CSV | ✅ |
-| 6 | تصدير PDF (pdfkit) | ✅ |
-| 7 | Rate limit 10/دقيقة | ✅ |
-| 8 | 12 اختبار محرك + 12 تكامل | ✅ |
-| 9 | تحديث verification/evidence | ✅ |
+| 1 | تحليل الحالة الفعلية + FK + `user_log` | ✅ |
+| 2 | ADR-003 تنفيذي (A+B + user_audit_log + version) | ✅ |
+| 3 | Migration 002 + rollback + idempotency | ✅ |
+| 4 | Prisma schema + generate/validate | ✅ |
+| 5 | `UserService` (update/softDelete/restore/listDeleted) | ✅ |
+| 6 | Validation صارم + أخطاء HTTP | ✅ |
+| 7 | Controller + Routes + RBAC | ✅ |
+| 8 | واجهة Users + UserForm + DeletedUsers | ✅ |
+| 9 | 12 قبول + 10 أمان + 9 وحدة | ✅ |
+| 10 | Regression + توثيق الإغلاق | ✅ |
 
 ## التحقق من القيود
 
@@ -64,13 +53,13 @@
 |-------|--------|---------|
 | `DB export.sql` دون تعديل | ✅ | لم يُلمس |
 | قاعدة `ihris_manage` دون تعديل | ✅ | كل التنفيذ على `ihris_test_gap001` |
-| قاعدة الاختبار لم تُحذف | ✅ | للمراجعة |
-| `docs/legacy-modern-comparison/` | ✅ | ملحق A فقط |
-| نطاق Sprint 1.5 | ✅ | GAP-001 + بنية |
-| ADR-003 | ✅ | مسجَّل؛ التنفيذ في Sprint 2 |
+| قاعدة الاختبار لم تُحذف | ✅ | محفوظة للمراجعة البشرية |
+| `docs/legacy-modern-comparison/` | ✅ | ملحق A فقط (+ A-2) |
+| نطاق Sprint 2 | ✅ | GAP-002 + GAP-003 فقط |
+| ADR-003 | ✅ | منفّذ |
 
 ## الخطوة التالية
 
-**لا تبدأ Sprint 2 قبل اعتماد التقرير النهائي.** عند الاعتماد:
-1. GAP-002/GAP-003 وفق ADR-003 حرفياً.
-2. `user_audit_log` + `version` + soft delete + صفحة المحذوفين.
+**لا تبدأ Sprint 3 قبل اعتماد تقرير Sprint 2.** عند الاعتماد:
+1. حسم BLK-007 (`user_log`) وBLK-008 (`isActive`).
+2. اختيار الفجوات التالية من `CORRECTED-GAP-REGISTRY.md` (41 متبقية).

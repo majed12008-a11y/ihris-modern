@@ -5,6 +5,10 @@
 | الملف | التاريخ | البيئة | المسؤول | الحالة |
 |-------|---------|--------|---------|---------|
 | `001_create_report_tables.sql` | 2026-11-05 | **ihris_test_gap001** فقط (قاعدة اختبار منفصلة) | Lead Implementation Engineer | ✅ مطبَّق ومُتحقَّق |
+| `002_user_soft_delete_and_audit.sql` | 2026-11-05 | **ihris_test_gap001** فقط (قاعدة اختبار منفصلة) | Lead Implementation Engineer | ✅ مطبَّق ومُتحقَّق (idempotent + rollback مُختبَر) |
+
+> **Note: `ihris_test_gap001` retained for human review as of 2026-11-05.**
+> لا تُحذف قاعدة الاختبار؛ تُترك للمراجعة البشرية ولإعادة تشغيل اختبارات GAP-002/GAP-003.
 
 ## تفاصيل التنفيذ
 
@@ -19,6 +23,17 @@
 | Idempotency | أُعيد التطبيق مرة ثانية: NOTICE فقط، بلا أخطاء |
 | Rollback | نُفِّذ `rollback/001_create_report_tables_rollback.sql` بنجاح على نفس القاعدة قبل إعادة التطبيق |
 | **قاعدة الإنتاج `ihris_manage`** | ❌ **لم تُمسّ** |
+
+## تفاصيل ترحيل 002 (GAP-002/GAP-003)
+
+| البند | القيمة |
+|-------|--------|
+| القاعدة | `ihris_test_gap001` فقط |
+| المحتوى | `users.version/deletedAt/deletedBy/deletionReason/restoredAt` + فهرس + `user_audit_log` + 3 فهارس + CHECK |
+| Idempotency | ✅ تطبيق ثانٍ: NOTICE فقط |
+| Rollback | ✅ `rollback/002_user_soft_delete_and_audit_rollback.sql` نُفِّذ ثم أُعيد التطبيق |
+| الإنتاج `ihris_manage` | ❌ لم تُمسّ |
+| الحالة في الإنتاج | ⏳ **pending** — لم يُطبَّق على أي بيئة إنتاج |
 
 ## ملاحظة تصحيحية مهمة
 

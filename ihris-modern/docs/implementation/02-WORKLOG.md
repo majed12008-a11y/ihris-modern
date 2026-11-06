@@ -118,3 +118,29 @@
 
 بوابة Sprint 1.5b اجتُزت بالكامل، ومحرك 1.5c يعمل فعلياً. GAP-001 **مكتملة**.
 Sprint 2 ينتظر اعتماد التقرير النهائي.
+
+---
+
+## Sprint 2 — 05 نوفمبر 2026 (GAP-002 + GAP-003)
+
+| الوقت | المهمة | الناتج | الحالة |
+|-------|--------|--------|--------|
+| 16:00 | المرحلة 1: تحليل الكود الفعلي + FK | تحديث `gaps/GAP-002/analysis.md` و`gaps/GAP-003/analysis.md` بقسم "الحالة الفعلية" | ✅ |
+| 16:20 | اكتشاف `user_log` مفقود | تسجيل BLK-007 (مرتبط بـRISK-013) خارج النطاق | ✅ |
+| 16:30 | المرحلة 2: ADR-003 تنفيذي | بنية `user_audit_log` + أعمدة + قرار A+B + عقد API | ✅ |
+| 16:45 | ترحيل 002 | أعمدة soft delete/version + جدول audit + فهارس | ✅ |
+| 17:00 | اختبار idempotency + rollback + إعادة تطبيق | على `ihris_test_gap001` فقط | ✅ |
+| 17:10 | Prisma schema + generate/validate | حقول جديدة + `UserAuditLog` | ✅ |
+| 17:30 | `UserService` + validation + controller + routes | update/softDelete/restore/listDeleted | ✅ |
+| 18:00 | اختبارات تكامل حقيقية | 12 سيناريو قبول | ✅ |
+| 18:30 | اختبارات أمان | 10 حالات (IDOR/403/401/409/422/injection/mass assignment) | ✅ |
+| 19:00 | اختبارات وحدة | 9 حالات Zod | ✅ |
+| 19:30 | واجهة: Users + UserForm + DeletedUsers + routes | تعديل/حذف/استعادة | ✅ |
+| 20:00 | Regression كامل | 73 backend + 3 frontend + tsc | ✅ |
+| 20:30 | إغلاق الوثائق | DASHBOARD 3/44 + RISK + BLOCKERS + Appendix A + applied README | ✅ |
+| 21:00 | Commit | `feature/GAP-002-003-user-management` | ✅ |
+
+### الخلاصة
+
+GAP-002 وGAP-003 **مغلقتان** وفق ADR-003 حرفياً. التقدم 3/44 (6.8%).
+Sprint 3 لا يبدأ قبل اعتماد التقرير وحسم BLK-007/BLK-008.

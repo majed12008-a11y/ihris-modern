@@ -189,3 +189,46 @@
 - `docs/implementation/gaps/GAP-001/evidence.md`
 - `docs/implementation/07-TEST-EVIDENCE.md`
 - `docs/implementation/04-DECISIONS.md` (ADR-004)
+
+---
+
+## ملحق A-2: حالة GAP-002 وGAP-003 — مكتملة (Closed)
+
+> أُضيف في Sprint 2 (05–06 نوفمبر 2026). لا يعدّل جداول التحليل الأصلية؛ يوثّق الإغلاق فقط.
+
+| البند | GAP-002 | GAP-003 |
+|-------|---------|---------|
+| العنوان | تعديل مستخدم | حذف مستخدم |
+| المجال | إدارة المستخدمين | إدارة المستخدمين |
+| الحالة | ✅ **مكتملة (Closed)** | ✅ **مكتملة (Closed)** |
+| تاريخ التحديث | 05 نوفمبر 2026 | 05 نوفمبر 2026 |
+| السيناريوهات | 5/5 (تعديل ذاتي/admin/403/400/409) | 7/7 (soft delete/422/self-delete/403/restore/422/401) |
+| اختبارات الأمان | 10/10 (مشتركة) | 10/10 (مشتركة) |
+| الحل | `PUT /api/users/:id` + version + audit + واجهة تعديل | Soft Delete + Restore خلال 30 يوماً + audit + صفحة محذوفين |
+| Regression | 73/73 backend + 3/3 frontend | 73/73 backend + 3/3 frontend |
+
+### ما أُنجز في Sprint 2
+
+1. **ADR-003 منفّذ**: soft delete (`deletedAt/deletedBy/deletionReason`) + `restoredAt` + `version` + `user_audit_log`.
+2. **تحقق صارم**: Zod `.strict()` يرفض الحقول غير المعروفة (Mass Assignment) ورسائل عربية.
+3. **صلاحيات**: self للبيانات الشخصية، admin لكل شيء، منع self-delete، منع تغيير الدور من غير admin، منع IDOR.
+4. **كشف السجلات المرتبطة**: فحص مسبق على `report_definitions` و`report_executions` (خيار A) + قيود `NO ACTION` كشبكة أمان (خيار B) → 422 برسالة واضحة.
+5. **Audit**: كل create/update/delete/restore يكتب `oldValues/newValues` بلا كلمة المرور.
+6. **واجهة**: تعديل مستخدم + ملف شخصي + Modal حذف بسبب + صفحة المحذوفين والاستعادة.
+7. **ترحيل 002**: idempotent + rollback مُختبَر على `ihris_test_gap001` فقط.
+8. **اختبارات**: 12 قبول + 10 أمان + 9 وحدة = 31 جديدة؛ الإجمالي 73 backend + 3 frontend.
+
+### ما تبقّى خارج نطاق Sprint 2 (لا يمنع الإغلاق)
+
+1. Purge نهائي بعد 90 يوماً — مؤجل P3 بقرار ADR-003.
+2. `user_log` (login/logout/activity) — مفقود، BLK-007 / RISK-013، فجوة منفصلة.
+3. آلية تعطيل (`isActive`) — BLK-008، تحتاج قراراً بشرياً.
+4. إبطال JWT القديم بعد الحذف/تغيير الدور — غير منفّذ (يسري حتى انتهاء الصلاحية).
+
+### الأدلة
+
+- `docs/implementation/gaps/GAP-002/verification.md`
+- `docs/implementation/gaps/GAP-002/evidence.md`
+- `docs/implementation/gaps/GAP-003/verification.md`
+- `docs/implementation/gaps/GAP-003/evidence.md`
+- `docs/implementation/migrations/applied/README.md`
