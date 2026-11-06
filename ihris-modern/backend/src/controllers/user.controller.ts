@@ -4,7 +4,9 @@ import { asyncHandler } from "../middleware/error";
 import { AuthRequest } from "../middleware/auth";
 import { sendValidationError } from "../lib/httpError";
 import {
+  activateUserSchema,
   createUserSchema,
+  deactivateUserSchema,
   deleteUserSchema,
   formatZodErrors,
   restoreUserSchema,
@@ -34,10 +36,12 @@ function parseId(req: Request): number {
 }
 
 function parseFilter(req: Request) {
+  const status = req.query.status as string | undefined;
   return {
     page: req.query.page ? parseInt(req.query.page as string, 10) : 1,
     limit: req.query.limit ? parseInt(req.query.limit as string, 10) : 50,
     search: req.query.search as string | undefined,
+    active: status === "active" ? true : status === "inactive" ? false : undefined,
   };
 }
 
@@ -103,6 +107,39 @@ export class UserController {
     }
 
     const user = await UserService.restore(
+      parseId(req),
+      actorOf(req),
+      parsed.data.version
+    );
+    res.json(user);
+  });
+
+  /** BLK-008: تعطيل حساب — admin فقط */
+  static deactivate = asyncHandler(async (req: Request, res: Response) => {
+    const parsed = deactivateUserSchema.safeParse(req.body);
+    if (!parsed.success) {
+      sendValidationError(res, formatZodErrors(parsed.error));
+      return;
+    }
+
+    const user = await UserService.deactivate(
+      parseId(req),
+      actorOf(req),
+      parsed.data.version,
+      parsed.data.reason
+    );
+    res.json(user);
+  });
+
+  /** BLK-008: إعادة تفعيل حساب — admin فقط */
+  static activate = asyncHandler(async (req: Request, res: Response) => {
+    const parsed = activateUserSchema.safeParse(req.body);
+    if (!parsed.success) {
+      sendValidationError(res, formatZodErrors(parsed.error));
+      return;
+    }
+
+    const user = await UserService.activate(
       parseId(req),
       actorOf(req),
       parsed.data.version

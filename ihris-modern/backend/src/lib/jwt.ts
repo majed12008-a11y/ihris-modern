@@ -5,6 +5,8 @@ export interface JwtPayload {
   userId: number;
   username: string;
   role: string;
+  /** ADR-005: يُقارن مع users.tokenVersion في كل طلب لإبطال الرموز القديمة */
+  tokenVersion: number;
 }
 
 const jwtSecret: Secret = config.jwtSecret as Secret;

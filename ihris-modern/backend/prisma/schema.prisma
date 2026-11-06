@@ -32,6 +32,10 @@ model User {
   deletionReason String?   @db.Text
   restoredAt     DateTime?
 
+  // ADR-005 / BLK-008: تعطيل الحساب + إبطال الرموز
+  isActive     Boolean @default(true)
+  tokenVersion Int     @default(1)
+
   access    UserAccess[]
   person    Person?  @relation(fields: [personId], references: [id])
   personId  Int?     @unique
@@ -41,6 +45,7 @@ model User {
   reportPreferences ReportPreference[] @relation("ReportPreferenceUser")
 
   @@index([deletedAt])
+  @@index([isActive, deletedAt])
   @@map("users")
 }
 
@@ -917,3 +922,4 @@ model ReportPreference {
   @@unique([userId, reportDefinitionId])
   @@map("report_preferences")
 }
+

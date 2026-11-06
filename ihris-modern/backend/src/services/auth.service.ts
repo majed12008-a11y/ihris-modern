@@ -31,8 +31,8 @@ export class AuthService {
       include: { access: { include: { role: true } } },
     });
 
-    // ADR-003: المستخدم المحذوف منطقياً لا يستطيع تسجيل الدخول (401 عام بلا كشف)
-    if (!user || user.deletedAt) {
+    // ADR-003: لا نكشف وجود الحساب قبل التحقق من كلمة المرور
+    if (!user) {
       throw unauthorized();
     }
 
@@ -46,12 +46,23 @@ export class AuthService {
       throw unauthorized();
     }
 
+    // ADR-003: المستخدم المحذوف منطقياً لا يستطيع تسجيل الدخول (401 عام بلا كشف)
+    if (user.deletedAt) {
+      throw unauthorized();
+    }
+
+    // BLK-008: الحساب المعطّل لا يستطيع تسجيل الدخول
+    if (!user.isActive) {
+      throw unauthorized("الحساب معطّل — تواصل مع مسؤول النظام لتفعيله");
+    }
+
     const role = user.access?.[0]?.role?.name || "hr_staff";
 
     const payload: JwtPayload = {
       userId: user.id,
       username: user.username,
       role,
+      tokenVersion: user.tokenVersion,
     };
 
     const token = signToken(payload);
@@ -112,6 +123,7 @@ export class AuthService {
       userId: user.id,
       username: user.username,
       role: input.role,
+      tokenVersion: user.tokenVersion,
     };
 
     const token = signToken(payload);

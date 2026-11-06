@@ -29,6 +29,8 @@ export interface UserFilter {
   page?: number;
   limit?: number;
   search?: string;
+  /** true = النشطون فقط، false = المعطّلون فقط، undefined = الكل (غير المحذوفين) */
+  active?: boolean;
 }
 
 export interface Actor {
@@ -54,6 +56,7 @@ function toPublic(user: any) {
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
     version: user.version,
+    isActive: user.isActive,
     deletedAt: user.deletedAt ?? null,
     deletedBy: user.deletedBy ?? null,
     deletionReason: user.deletionReason ?? null,
@@ -74,7 +77,7 @@ async function writeAudit(
   tx: any,
   entry: {
     userId: number;
-    action: "create" | "update" | "delete" | "restore";
+    action: "create" | "update" | "delete" | "restore" | "deactivate" | "activate";
     changedBy: number;
     oldValues?: unknown;
     newValues?: unknown;
@@ -100,6 +103,7 @@ export class UserService {
 
     // ADR-003: القائمة الافتراضية تستثني المحذوفين منطقياً
     const where: any = { deletedAt: null };
+    if (filter.active !== undefined) where.isActive = filter.active;
     if (search) {
       where.OR = [
         { username: { contains: search } },
@@ -271,11 +275,16 @@ export class UserService {
       throw forbidden("لا يمكنك تغيير دور حسابك");
     }
 
+    // ADR-005: تغيير الدور يُبطل كل الرموز القديمة فوراً
+    const roleChanged =
+      actorIsAdmin && input.role !== undefined && input.role !== currentRole;
+
     const updated = await prisma.$transaction(async (tx) => {
       const data: any = {};
       if (input.firstname !== undefined) data.firstname = input.firstname;
       if (input.lastname !== undefined) data.lastname = input.lastname;
       if (input.email !== undefined) data.email = input.email;
+      if (roleChanged) data.tokenVersion = { increment: 1 };
 
       if (input.email !== undefined) {
         const duplicate = await tx.user.findFirst({
@@ -357,7 +366,8 @@ export class UserService {
       throw unprocessable(
         `لا يمكن حذف المستخدم: لديه ${related.total} سجل مرتبط ` +
           `(تعريفات تقارير: ${related.definitions}، تنفيذات تقارير: ${related.executions}). ` +
-          "عطّل الحساب بدلاً من حذفه للحفاظ على سجلات العمل.",
+          "عطّل الحساب بدلاً من حذفه للحفاظ على سجلات العمل — " +
+          "يمكنك تعطيله من صفحة المستخدمين.",
         { relatedRecords: related }
       );
     }
@@ -370,6 +380,8 @@ export class UserService {
           deletedBy: actor.userId,
           deletionReason: reason,
           version: { increment: 1 },
+          // ADR-005: إبطال فوري لكل الرموز الصادرة قبل الحذف
+          tokenVersion: { increment: 1 },
         },
       });
 
@@ -401,6 +413,106 @@ export class UserService {
     });
 
     return toPublic(deleted);
+  }
+
+  /**
+   * تعطيل حساب — admin فقط (BLK-008).
+   * يختلف عن الحذف: يُسمح حتى لو كان للمستخدم سجلات مرتبطة،
+   * ولا يخفيه من قائمة المستخدمين.
+   */
+  static async deactivate(
+    id: number,
+    actor: Actor,
+    version: number,
+    reason?: string
+  ) {
+    if (!isAdmin(actor)) throw forbidden("التعطيل متاح لمسؤول النظام فقط");
+    if (actor.userId === id) throw forbidden("لا يمكنك تعطيل حسابك الشخصي");
+
+    const target = await prisma.user.findUnique({ where: { id } });
+    if (!target) throw notFound();
+    if (target.deletedAt) throw unprocessable("المستخدم محذوف — لا يمكن تعطيله");
+    if (!target.isActive) throw conflict("المستخدم معطّل بالفعل");
+
+    const disabled = await prisma.$transaction(async (tx) => {
+      const result = await tx.user.updateMany({
+        where: { id, version, deletedAt: null, isActive: true },
+        data: {
+          isActive: false,
+          version: { increment: 1 },
+          // ADR-005: إبطال فوري لكل الرموز الصادرة قبل التعطيل
+          tokenVersion: { increment: 1 },
+        },
+      });
+
+      if (result.count === 0) {
+        throw conflict(
+          "تعارض في النسخة (version): عُدِّل المستخدم من جلسة أخرى. أعد تحميل البيانات وحاول مجدداً"
+        );
+      }
+
+      const fresh = await tx.user.findUnique({
+        where: { id },
+        include: { access: { include: { role: true } } },
+      });
+
+      await writeAudit(tx, {
+        userId: id,
+        action: "deactivate",
+        changedBy: actor.userId,
+        oldValues: { isActive: true },
+        newValues: { isActive: false },
+        reason: reason ?? null,
+      });
+
+      return fresh;
+    });
+
+    return toPublic(disabled);
+  }
+
+  /** إعادة تفعيل حساب — admin فقط (BLK-008) */
+  static async activate(id: number, actor: Actor, version: number) {
+    if (!isAdmin(actor)) throw forbidden("التفعيل متاح لمسؤول النظام فقط");
+
+    const target = await prisma.user.findUnique({ where: { id } });
+    if (!target) throw notFound();
+    if (target.deletedAt) throw unprocessable("المستخدم محذوف — استعده أولاً");
+    if (target.isActive) throw conflict("المستخدم نشط بالفعل");
+
+    const enabled = await prisma.$transaction(async (tx) => {
+      const result = await tx.user.updateMany({
+        where: { id, version, deletedAt: null, isActive: false },
+        data: {
+          isActive: true,
+          version: { increment: 1 },
+          // لا زيادة لـ tokenVersion: رموز ما قبل التعطيل مبطلة أصلاً
+        },
+      });
+
+      if (result.count === 0) {
+        throw conflict(
+          "تعارض في النسخة (version): عُدِّل المستخدم من جلسة أخرى. أعد تحميل البيانات وحاول مجدداً"
+        );
+      }
+
+      const fresh = await tx.user.findUnique({
+        where: { id },
+        include: { access: { include: { role: true } } },
+      });
+
+      await writeAudit(tx, {
+        userId: id,
+        action: "activate",
+        changedBy: actor.userId,
+        oldValues: { isActive: false },
+        newValues: { isActive: true },
+      });
+
+      return fresh;
+    });
+
+    return toPublic(enabled);
   }
 
   /** استعادة — admin فقط، خلال 30 يوماً */

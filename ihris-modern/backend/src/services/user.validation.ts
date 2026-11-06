@@ -69,6 +69,25 @@ export const restoreUserSchema = z
   })
   .strict();
 
+/** BLK-008: تعطيل الحساب — السبب اختياري */
+export const deactivateUserSchema = z
+  .object({
+    version,
+    reason: z
+      .string()
+      .trim()
+      .max(500, "سبب التعطيل يجب ألا يتجاوز 500 حرف")
+      .optional(),
+  })
+  .strict();
+
+/** BLK-008: إعادة تفعيل الحساب */
+export const activateUserSchema = z
+  .object({
+    version,
+  })
+  .strict();
+
 export const updateRoleSchema = z
   .object({
     role,

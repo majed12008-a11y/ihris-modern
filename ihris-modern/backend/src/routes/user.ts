@@ -14,6 +14,10 @@ router.put("/:id", authenticate, UserController.update);
 router.delete("/:id", authenticate, requireRole("admin"), UserController.softDelete);
 router.post("/:id/restore", authenticate, requireRole("admin"), UserController.restore);
 
+// BLK-008: تعطيل/تفعيل الحساب — admin فقط
+router.put("/:id/deactivate", authenticate, requireRole("admin"), UserController.deactivate);
+router.put("/:id/activate", authenticate, requireRole("admin"), UserController.activate);
+
 // @deprecated — يبقى للتوافق؛ يتطلب version الآن
 router.post("/:id/role", authenticate, requireRole("admin"), UserController.updateRole);
 
