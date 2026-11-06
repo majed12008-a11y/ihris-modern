@@ -8,6 +8,9 @@ import PersonDetail from "@/pages/PersonDetail";
 import PersonForm from "@/pages/PersonForm";
 import Positions from "@/pages/Positions";
 import PositionForm from "@/pages/PositionForm";
+import Facilities from "@/pages/Facilities";
+import FacilityDetail from "@/pages/FacilityDetail";
+import FacilityForm from "@/pages/FacilityForm";
 import Salaries from "@/pages/Salaries";
 import SalaryForm from "@/pages/SalaryForm";
 import Training from "@/pages/Training";
@@ -61,6 +64,10 @@ export default function App() {
           <Route path="positions" element={<Positions />} />
           <Route path="positions/new" element={<PositionForm />} />
           <Route path="positions/:id/edit" element={<PositionForm />} />
+          <Route path="facilities" element={<Facilities />} />
+          <Route path="facilities/new" element={<FacilityForm />} />
+          <Route path="facilities/:id" element={<FacilityDetail />} />
+          <Route path="facilities/:id/edit" element={<FacilityForm />} />
           <Route path="salaries" element={<Salaries />} />
           <Route path="salaries/new" element={<SalaryForm />} />
           <Route path="salaries/:id/edit" element={<SalaryForm />} />
