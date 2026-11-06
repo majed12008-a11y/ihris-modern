@@ -30,7 +30,7 @@ export default function Dashboard() {
         return {
           total_persons: personsRes.data.total || 0,
           total_positions: positionsRes.data.total || 0,
-          total_facilities: facilitiesRes.data.length || 0,
+          total_facilities: facilitiesRes.data.total || 0,
           total_salaries: salariesRes.data.total || 0,
           total_training_courses: trainingRes.data.length || 0,
           total_users: usersRes.data.total || 0,
