@@ -8,6 +8,7 @@ import personRoutes from "./routes/person";
 import positionRoutes from "./routes/position";
 import facilityRoutes from "./routes/facility";
 import countryRoutes from "./routes/country";
+import jobRoutes from "./routes/job";
 import salaryRoutes from "./routes/salary";
 import trainingRoutes from "./routes/training";
 import userRoutes from "./routes/user";
@@ -32,6 +33,7 @@ export function createApp() {
   app.use("/api/positions", positionRoutes);
   app.use("/api/facilities", facilityRoutes);
   app.use("/api/countries", countryRoutes);
+  app.use("/api/jobs", jobRoutes);
   app.use("/api/salaries", salaryRoutes);
   app.use("/api/training", trainingRoutes);
   app.use("/api/users", userRoutes);

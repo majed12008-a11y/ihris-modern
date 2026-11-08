@@ -9,10 +9,12 @@
 | `003_user_active_flag.sql` | 2026-11-06 | **ihris_test_gap001** فقط | Lead Implementation Engineer | ✅ مطبَّق ومُتحقَّق (idempotent + rollback مُختبَر) |
 | `004_user_token_version.sql` | 2026-11-06 | **ihris_test_gap001** فقط | Lead Implementation Engineer | ✅ مطبَّق ومُتحقَّق (idempotent + rollback مُختبَر) |
 | `005_facility_version_and_audit.sql` | 2026-11-06 | **ihris_test_gap001** فقط | Lead Implementation Engineer | ✅ مطبَّق ومُتحقَّق (idempotent + rollback مُختبَر) |
+| `006_country_version_and_audit.sql` | 2026-11-08 | **ihris_test_gap001** فقط | Lead Implementation Engineer | ✅ مطبَّق ومُتحقَّق (idempotent + rollback مُختبَر) |
+| `007_job_version_and_audit.sql` | 2026-11-08 | **ihris_test_gap001** فقط | Lead Implementation Engineer | ✅ مطبَّق ومُتحقَّق (idempotent + rollback مُختبَر) |
 
-> **Note: `ihris_test_gap001` retained for human review as of 2026-11-06.**
+> **Note: `ihris_test_gap001` retained for human review as of 2026-11-08.**
 > لا تُحذف قاعدة الاختبار؛ تُترك للمراجعة البشرية ولإعادة تشغيل اختبارات
-> GAP-002/GAP-003 وSprint 2.5 وGAP-004/005/006.
+> GAP-002/GAP-003 وSprint 2.5 وGAP-004/005/006 وSprint 4 (GAP-M-005..010).
 
 ## تفاصيل التنفيذ
 
@@ -76,6 +78,37 @@
 
 > **تنويه احتفاظ:** `facility_audit_log` بلا FK إلى `facilities` عمداً، ليبقى سجل التدقيق
 > بعد الحذف الفيزيائي للمنشأة.
+
+## تفاصيل ترحيل 006 (GAP-M-008/009/010 — الدول)
+
+| البند | القيمة |
+|-------|--------|
+| القاعدة | `ihris_test_gap001` فقط |
+| المحتوى | `countries.version INTEGER NOT NULL DEFAULT 1` + `country_audit_log` + 3 فهارس |
+| Idempotency | ✅ تطبيق ثانٍ: NOTICE فقط |
+| Rollback | ✅ `rollback/006_country_version_and_audit_rollback.sql` |
+| الإنتاج `ihris_manage` | ❌ لم تُمسّ |
+| الحالة في الإنتاج | ⏳ **pending** |
+
+> **تنويه احتفاظ:** `country_audit_log` بلا FK إلى `countries` عمداً، ليبقى سجل التدقيق
+> بعد الحذف الفيزيائي للدولة.
+
+> **تنويه ترقيم:** رُقّم هذا الترحيل `006` بعد أن أُغلق BLK-010 («لا عمود `code` في
+> `hippo_facility`»)، فلم تعد هناك حاجة لترحيل كود المنشأة المقترح سابقاً بالرقم 006.
+
+## تفاصيل ترحيل 007 (GAP-M-005/006/007 — المسميات الوظيفية)
+
+| البند | القيمة |
+|-------|--------|
+| القاعدة | `ihris_test_gap001` فقط |
+| المحتوى | `jobs.version INTEGER NOT NULL DEFAULT 1` + `job_audit_log` + 3 فهارس + `idx_jobs_title` + `idx_jobs_code` |
+| Idempotency | ✅ تطبيق ثانٍ: NOTICE فقط |
+| Rollback | ✅ `rollback/007_job_version_and_audit_rollback.sql` |
+| الإنتاج `ihris_manage` | ❌ لم تُمسّ |
+| الحالة في الإنتاج | ⏳ **pending** |
+
+> **تنويه احتفاظ:** `job_audit_log` بلا FK إلى `jobs` عمداً، ليبقى سجل التدقيق بعد الحذف
+> الفيزيائي للمسمى. تفرّد `jobs.title` يُفرض تطبيقياً لا بـUNIQUE في DB (مطابقة للقديم).
 
 ## ملاحظة تصحيحية مهمة
 

@@ -23,6 +23,7 @@ import ReportDetail from "@/pages/ReportDetail";
 import ReportForm from "@/pages/ReportForm";
 import ReportExecute from "@/pages/ReportExecute";
 import Countries from "@/pages/Countries";
+import Jobs from "@/pages/Jobs";
 
 function LoadingSpinner() {
   return (
@@ -84,6 +85,7 @@ export default function App() {
           <Route path="reports/:id/edit" element={<ReportForm />} />
           <Route path="reports/:id/execute" element={<ReportExecute />} />
           <Route path="countries" element={<Countries />} />
+          <Route path="jobs" element={<Jobs />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

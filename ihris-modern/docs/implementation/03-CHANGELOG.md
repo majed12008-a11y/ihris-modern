@@ -1,5 +1,38 @@
 # سجل التغييرات (Changelog)
 
+## [0.6.0] - 08 نوفمبر 2026 — Sprint 4 (البيانات المرجعية)
+
+### أُضيف
+- **GAP-M-008**: ✅ إضافة دولة (backend + UI + audit + 409).
+- **GAP-M-009**: ✅ تعديل دولة (version lock + audit).
+- **GAP-M-010**: ✅ حذف دولة (حماية 6 مراجع → 422 + audit يبقى بعد الحذف).
+- **GAP-M-005**: ✅ إضافة مسمى وظيفي (backend + UI + cascade + 409).
+- **GAP-M-006**: ✅ تعديل مسمى وظيفي (version lock + audit).
+- **GAP-M-007**: ✅ حذف مسمى وظيفي (حماية `positions` → 422).
+
+### تغييرات
+- ترحيل `006_country_version_and_audit.sql` — `countries.version` + `country_audit_log` + 3 فهارس.
+- ترحيل `007_job_version_and_audit.sql` — `jobs.version` + `job_audit_log` + فهارس title/code.
+- ADR-007 (10 قرارات) في `04-DECISIONS.md` §7.
+- `country.validation.ts` + `country.service.ts` (create/update/delete/list + audit).
+- `job.validation.ts` + `job.service.ts` (CRUD + cascade + audit + حماية positions).
+- `/api/countries` (4 نقاط) و`/api/jobs` (4 + 3 meta).
+- `Countries.tsx` + `Jobs.tsx` + routes + عنصرا تنقّل.
+- اختبارات Sprint 4: 12 قبول + 8 أمان + 8 وحدة = **28**.
+
+### مُغلق
+- **BLK-009**: `regions` تبقى مستقلة (Revisit P3).
+- **BLK-010**: لا عمود `code` في `hippo_facility` → `not in old system — deferred`.
+
+### مؤجل
+- **GAP-M-004** (عرض تفاصيل وظيفة) — اختيارية، لم تُنفَّذ.
+
+### الأرقام
+- Backend: 108 → **136/136** (19 suites).
+- Frontend: **3/3**.
+- الإجمالي: **139/139**.
+- التقدم: 7/44 → **13/44 = 29.5%**.
+
 ## [0.5.0] - 06 نوفمبر 2026 — Sprint 2.5 + Sprint 3
 
 ### أُغلق

@@ -100,6 +100,14 @@
 | EVID-T-030 | Regression نهائي | backend + frontend | FACT | 108/108 + 3/3 = 111/111 | مؤكدة |
 | EVID-T-031 | ترحيلات 003/004/005 | psql على `ihris_test_gap001` | FACT | apply/reapply/rollback/reapply | مؤكدة |
 | EVID-T-032 | `ihris_manage` سليمة | psql على `ihris_manage` | FACT | 0 أعمدة/جداول جديدة | مؤكدة |
+| EVID-T-033 | قبول GAP-M-008/009/010 (6) | `country.test.ts` | FACT | 6/6: إنشاء/403/409/تعديل/حذف/422 | مؤكدة |
+| EVID-T-034 | قبول GAP-M-005/006/007 (6) | `job.test.ts` | FACT | 6/6: إنشاء/403/409/cascade/تعديل/حذف | مؤكدة |
+| EVID-T-035 | أمان الدول (4) | `country.security.test.ts` | FACT | 403/401/mass assignment/كائن في `name` | مؤكدة |
+| EVID-T-036 | أمان المسميات (4) | `job.security.test.ts` | FACT | mass assignment/409/403/حقن SQL | مؤكدة |
+| EVID-T-037 | وحدة Zod (8) | `country.validation.test.ts` + `job.validation.test.ts` | FACT | `.strict()` + `version` + nullable cascade | مؤكدة |
+| EVID-T-038 | Regression نهائي (Sprint 4) | backend + frontend | FACT | 136/136 + 3/3 = 139/139 | مؤكدة |
+| EVID-T-039 | ترحيلات 006/007 | psql على `ihris_test_gap001` | FACT | apply/reapply/rollback/reapply + إعادة الأعمدة | مؤكدة |
+| EVID-T-040 | `ihris_manage` بعد Sprint 4 | psql على `ihris_manage` | FACT | 0 أعمدة (`country/job version`) و0 جداول تدقيق | مؤكدة |
 
 ---
 
@@ -107,14 +115,15 @@
 
 | النوع | العدد | النسبة المئوية |
 |------|-------|-------------|
-| FACT (حقيقة مثبتة) | 71 | 100% |
+| FACT (حقيقة مثبتة) | 79 | 100% |
 | INFERENCE (استنتاج) | 0 | 0% |
 | ASSUMPTION (افتراض) | 0 | 0% |
 | UNKNOWN (غير معروفة) | 0 | 0% |
-| **الإجمالي** | **71 دليل** | **100%** |
+| **الإجمالي** | **79 دليل** | **100%** |
 
 > تصحيح Sprint 1.5b/1.5c: لم يبقَ أي دليل اختبار UNKNOWN أو INFERENCE؛ كلها نُفِّذت فعلياً.
 > Sprint 2.5 وSprint 3 أضافا 17 دليلاً جديداً (EVID-215..231 + EVID-T-023..032).
+> Sprint 4 أضاف 8 أدلة (EVID-T-033..040).
 
 ---
 
@@ -126,8 +135,9 @@
 | عدد الأدلة لـ GAP-002/GAP-003 | 26 دليل |
 | عدد الأدلة لـ Sprint 2.5 (BLK-008 + ADR-005) | 9 أدلة |
 | عدد الأدلة لـ GAP-004/005/006 | 8 أدلة |
-| عدد الأدلة من النوع FACT | 71 دليل |
+| عدد الأدلة لـ GAP-M-005..010 (Sprint 4) | 8 أدلة |
+| عدد الأدلة من النوع FACT | 79 دليل |
 | نسبة الأدلة المؤكدة | 100% |
 | قاعدة الاختبار | `ihris_test_gap001` |
 | سجل الترحيل | `migrations/applied/README.md` |
-| التقدم | 7/44 = 15.9% |
+| التقدم | 13/44 = 29.5% |

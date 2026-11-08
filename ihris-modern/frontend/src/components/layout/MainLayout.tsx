@@ -11,6 +11,7 @@ import {
   UserX,
   Building2,
   Globe2,
+  Layers,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 
@@ -19,6 +20,7 @@ const navigation = [
   { name: "الموظفون", path: "/persons", icon: Users },
   { name: "المنشآت", path: "/facilities", icon: Building2 },
   { name: "الوظائف", path: "/positions", icon: Briefcase },
+  { name: "المسميات الوظيفية", path: "/jobs", icon: Layers },
   { name: "الدول", path: "/countries", icon: Globe2 },
   { name: "الرواتب", path: "/salaries", icon: CreditCard },
   { name: "التدريب", path: "/training", icon: BookOpen },

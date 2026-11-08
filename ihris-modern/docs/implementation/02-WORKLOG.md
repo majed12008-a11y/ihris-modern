@@ -200,3 +200,37 @@ BLK-008 **مغلق**. ADR-005 منفّذ. GAP-L-002 جزئية 55% (P2)، وGAP-
 GAP-004/005/006 **مغلقة**. التقدم **7/44 = 15.9%** (المتوقع 6/44؛ الفرق أن GAP-L-003
 ثبت أنها مكتملة فعلاً). BLK-009 وBLK-010 مفتوحان ويحتاجان قراراً.
 
+## Sprint 4 — 08 نوفمبر 2026 (GAP-M-008/009/010 + GAP-M-005/006/007)
+
+| الوقت | المهمة | الناتج | الحالة |
+|-------|--------|--------|--------|
+| 09:00 | تحليل الحالة الفعلية للدول والمسميات | `gaps/GAP-M-008/analysis.md` + `gaps/GAP-M-005/analysis.md` | ✅ |
+| 09:30 | فحص BLK-010 في البيانات القديمة | `gaps/GAP-004/analysis.md` §6 — لا `code` → **مغلق** | ✅ |
+| 09:40 | إغلاق BLK-009 | `05-BLOCKERS.md` — `regions` مستقلة | ✅ |
+| 10:00 | ADR-007 (10 قرارات) | `04-DECISIONS.md` §7 | ✅ |
+| 10:30 | ترحيل 006 (دول) + rollback | تطبيق → إعادة → rollback → إعادة | ✅ |
+| 10:50 | ترحيل 007 (مسميات) + rollback | تطبيق → إعادة → rollback → إعادة | ✅ |
+| 11:10 | Prisma schema + validate/generate | `version` + `CountryAuditLog`/`JobAuditLog` + فهارس | ✅ |
+| 11:30 | `country.validation.ts` + `country.service.ts` | CRUD + audit + uniqueness + 6 مراجع → 422 | ✅ |
+| 12:00 | `country.controller.ts` + `routes/country.ts` | 4 نقاط نهاية + RBAC | ✅ |
+| 12:20 | `job.validation.ts` + `job.service.ts` | CRUD + cascade + audit + حماية `positions` | ✅ |
+| 12:50 | `job.controller.ts` + `routes/job.ts` | 4 + 3 meta | ✅ |
+| 13:10 | `app.ts` | تسجيل `/api/countries` + `/api/jobs` | ✅ |
+| 13:30 | `Countries.tsx` + `Jobs.tsx` | list/search/pagination/modals/cascade | ✅ |
+| 14:00 | `App.tsx` + `MainLayout.tsx` | routes + عنصرا تنقّل | ✅ |
+| 14:20 | `tsc --noEmit` | backend ✅ / frontend ✅ | ✅ |
+| 14:40 | `country.test.ts` + `job.test.ts` | 12/12 قبول | ✅ |
+| 15:10 | `*.security.test.ts` | 8/8 أمان | ✅ |
+| 15:30 | `*.validation.test.ts` | 8/8 وحدة | ✅ |
+| 15:50 | Regression كامل | 136 backend + 3 frontend = 139/139 | ✅ |
+| 16:20 | rollback 006/007 ثم إعادة التطبيق | 0→1 عمود، 0→2 جدول تدقيق | ✅ |
+| 16:40 | فحص `ihris_manage` | 0 أعمدة/جداول جديدة | ✅ |
+| 17:00 | إغلاق الوثائق | DASHBOARD 13/44 + REGISTRY + 07/15 + gaps | ✅ |
+
+### الخلاصة
+
+GAP-M-008/009/010 وGAP-M-005/006/007 **مغلقة**. التقدم **13/44 = 29.5%**.
+BLK-009 وBLK-010 **مغلقان**. GAP-M-004 (اختيارية) مؤجلة. Migration 006 حلّ محل
+مقترح «006 لكود المنشأة» بعد إغلاق BLK-010 بالدليل.
+
+

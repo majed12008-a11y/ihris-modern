@@ -1,6 +1,6 @@
-# أدلة الاختبار — GAP-001 + GAP-002/003 + Sprint 2.5 + GAP-004/005/006
+# أدلة الاختبار — GAP-001 + GAP-002/003 + Sprint 2.5 + GAP-004/005/006 + Sprint 4
 
-> آخر تحديث: 06 نوفمبر 2026 — Sprint 1.5b/1.5c + Sprint 2 + Sprint 2.5 + Sprint 3.
+> آخر تحديث: 08 نوفمبر 2026 — Sprint 1.5b/1.5c + Sprint 2 + Sprint 2.5 + Sprint 3 + Sprint 4.
 > كل رقم أدناه مأخوذ من تشغيل فعلي، لا من تقدير.
 
 ## 1. تصحيح تاريخي
@@ -17,7 +17,7 @@
 | Jest | 29.7.0 + ts-jest |
 | إعداد Jest | `forceExit: true`, `testTimeout: 30000`, `maxWorkers: 1` |
 
-## 3. Backend — 108/108 ✅ (13 suites)
+## 3. Backend — 136/136 ✅ (19 suites)
 
 الأمر:
 
@@ -26,25 +26,31 @@ DATABASE_URL=postgresql://ihris:***@localhost:5432/ihris_test_gap001 \
 npx jest --runInBand
 ```
 
-المخرج الفعلي (بعد Sprint 3):
+المخرج الفعلي (بعد Sprint 4):
 
 ```text
+PASS src/__tests__/job.test.ts
+PASS src/__tests__/country.test.ts
+PASS src/__tests__/job.security.test.ts
+PASS src/__tests__/country.security.test.ts
+PASS src/__tests__/job.validation.test.ts
+PASS src/__tests__/country.validation.test.ts
 PASS src/__tests__/user.lifecycle.test.ts
-PASS src/__tests__/facility.test.ts
 PASS src/__tests__/user.test.ts
 PASS src/__tests__/user.security.test.ts
-PASS src/__tests__/auth.test.ts
-PASS src/__tests__/report.test.ts
+PASS src/__tests__/facility.test.ts
 PASS src/__tests__/facility.security.test.ts
-PASS src/__tests__/person.test.ts
+PASS src/__tests__/report.test.ts
+PASS src/__tests__/auth.test.ts
 PASS src/__tests__/position.test.ts
-PASS src/__tests__/user.validation.test.ts
-PASS src/__tests__/facility.validation.test.ts
+PASS src/__tests__/person.test.ts
 PASS src/__tests__/report.engine.test.ts
+PASS src/__tests__/user.validation.test.ts
 PASS src/__tests__/report.validation.test.ts
+PASS src/__tests__/facility.validation.test.ts
 
-Test Suites: 13 passed, 13 total
-Tests:       108 passed, 108 total
+Test Suites: 19 passed, 19 total
+Tests:       136 passed, 136 total
 ```
 
 ### 3.1 محرك التقارير — 12/12
@@ -237,22 +243,25 @@ PARAM_COUNT: 1
 ROWS: الجمهورية اليمنية / مصر / السعودية / الإمارات / الأردن
 ```
 
-## 8. التحقق من الترحيلات (003/004/005)
+## 8. التحقق من الترحيلات (003/004/005/006/007)
 
 | الترحيل | تطبيق | إعادة تطبيق (idempotent) | rollback | إعادة تطبيق |
 |---------|-------|--------------------------|----------|-------------|
 | 003 `isActive` | ✅ | ✅ | ✅ | ✅ |
 | 004 `tokenVersion` | ✅ | ✅ | ✅ | ✅ |
 | 005 `facility` | ✅ | ✅ | ✅ | ✅ |
+| 006 `country` | ✅ | ✅ | ✅ | ✅ |
+| 007 `job` | ✅ | ✅ | ✅ | ✅ |
 
-تحقق مباشر بعد الإعادة:
+تحقق مباشر بعد الإعادة (Sprint 4):
 
 ```text
-users:       isActive, tokenVersion موجودان
-users index: idx_users_is_active_deleted_at موجود
-facilities:  version موجود
-table:       facility_audit_log موجود
-CHECK:       user_audit_log_action_check يقبل deactivate/activate
+countries:      version موجود
+jobs:           version موجود
+tables:         country_audit_log, job_audit_log موجودان
+indexes:        idx_jobs_title, idx_jobs_code, idx_country_audit_log_*, idx_job_audit_log_*
+بعد rollback:   c_ver=0, j_ver=0, audit_tables=0
+بعد الإعادة:    countries=5, c_ver=1, j_ver=1, audit_tables=2
 ```
 
 ## 9. التحقق من `ihris_manage` (لم تُمسّ)
@@ -262,26 +271,41 @@ user_new_cols    | 0
 user_audit       | (null)
 facility_version | 0
 facility_audit   | (null)
+country_version  | 0
+job_version      | 0
+country/job audit| 0 جداول
 ```
 
 ## 10. الخلاصة
 
 | الفئة | العدد | ناجح | فاشل |
 |-------|-------|-------|------|
-| Backend (Sprint 1.5 + 2 + 2.5 + 3) | 108 | 108 | 0 |
+| Backend (Sprint 1.5 + 2 + 2.5 + 3 + 4) | 136 | 136 | 0 |
 | Frontend | 3 | 3 | 0 |
-| **الإجمالي** | **111** | **111** | **0** |
+| **الإجمالي** | **139** | **139** | **0** |
 | TypeScript | 2 مشروع | 2 | 0 |
-| ترحيلات 003/004/005 (idempotency/rollback) | 12 خطوة | 12 | 0 |
+| ترحيلات 003–007 (idempotency/rollback) | 20 خطوة | 20 | 0 |
 
-> Regression Sprint 2.5 (87/87) محقَّق داخل الـ108 الحالية:
-> 73 سابق + 11 جديد + 3 frontend = 87، ثم + 24 من Sprint 3 = 111.
+> Regression: 136 backend + 3 frontend = **139/139**. Sprint 4 أضاف 28 اختباراً
+> (12 قبول + 8 أمان + 8 وحدة) على 111 سابقة.
 
 ## 11. قيود الاختبار
 
 | القيد | الأثر |
 |-------|-------|
-| اختبارات `person`/`position`/`facility` تمسح بياناتها | تعمل على `ihris_test_gap001` فقط، لا `ihris_manage` |
+| اختبارات `person`/`position`/`facility`/`country`/`job` تمسح بياناتها | تعمل على `ihris_test_gap001` فقط، لا `ihris_manage` |
 | Rate limit في الذاكرة | لا يُختبر عبر عمليات متعددة |
 | PDF لا يشكّل العربية | يُتحقق من صلاحية الملف (`%PDF-`) لا من صحة العرض البصري |
 | GAP-L-002 | لم يُختبر Arabic PDF أو Excel لأنهما غير منفّذين |
+| GAP-M-004 | غير منفّذة — لا اختبارات لها |
+
+## 12. Sprint 4 — تفصيل الاختبارات الجديدة (28/28)
+
+| الملف | العدد | التغطية |
+|-------|-------|---------|
+| `country.test.ts` | 6 | GAP-M-008/009/010: إنشاء + 403 + تكرار 409 + تعديل + audit + حذف + 422 |
+| `job.test.ts` | 6 | GAP-M-005/006/007: إنشاء + 403 + تكرار 409 + cascade + تعديل + حذف |
+| `country.security.test.ts` | 4 | 403، 401، mass assignment، كائن/ملف في `name` |
+| `job.security.test.ts` | 4 | mass assignment، version خاطئ 409، 403 حذف، حقن SQL |
+| `country.validation.test.ts` | 4 | Zod `.strict()` + `version` إلزامي |
+| `job.validation.test.ts` | 4 | Zod `.strict()` + cascade nullable + `version` إلزامي |
