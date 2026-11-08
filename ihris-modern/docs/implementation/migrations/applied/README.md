@@ -6,9 +6,13 @@
 |-------|---------|--------|---------|---------|
 | `001_create_report_tables.sql` | 2026-11-05 | **ihris_test_gap001** فقط (قاعدة اختبار منفصلة) | Lead Implementation Engineer | ✅ مطبَّق ومُتحقَّق |
 | `002_user_soft_delete_and_audit.sql` | 2026-11-05 | **ihris_test_gap001** فقط (قاعدة اختبار منفصلة) | Lead Implementation Engineer | ✅ مطبَّق ومُتحقَّق (idempotent + rollback مُختبَر) |
+| `003_user_active_flag.sql` | 2026-11-06 | **ihris_test_gap001** فقط | Lead Implementation Engineer | ✅ مطبَّق ومُتحقَّق (idempotent + rollback مُختبَر) |
+| `004_user_token_version.sql` | 2026-11-06 | **ihris_test_gap001** فقط | Lead Implementation Engineer | ✅ مطبَّق ومُتحقَّق (idempotent + rollback مُختبَر) |
+| `005_facility_version_and_audit.sql` | 2026-11-06 | **ihris_test_gap001** فقط | Lead Implementation Engineer | ✅ مطبَّق ومُتحقَّق (idempotent + rollback مُختبَر) |
 
-> **Note: `ihris_test_gap001` retained for human review as of 2026-11-05.**
-> لا تُحذف قاعدة الاختبار؛ تُترك للمراجعة البشرية ولإعادة تشغيل اختبارات GAP-002/GAP-003.
+> **Note: `ihris_test_gap001` retained for human review as of 2026-11-06.**
+> لا تُحذف قاعدة الاختبار؛ تُترك للمراجعة البشرية ولإعادة تشغيل اختبارات
+> GAP-002/GAP-003 وSprint 2.5 وGAP-004/005/006.
 
 ## تفاصيل التنفيذ
 
@@ -34,6 +38,44 @@
 | Rollback | ✅ `rollback/002_user_soft_delete_and_audit_rollback.sql` نُفِّذ ثم أُعيد التطبيق |
 | الإنتاج `ihris_manage` | ❌ لم تُمسّ |
 | الحالة في الإنتاج | ⏳ **pending** — لم يُطبَّق على أي بيئة إنتاج |
+
+## تفاصيل ترحيل 003 (BLK-008)
+
+| البند | القيمة |
+|-------|--------|
+| القاعدة | `ihris_test_gap001` فقط |
+| المحتوى | `users.isActive BOOLEAN NOT NULL DEFAULT true` + فهرس `(isActive, deletedAt)` + توسيع CHECK لـ`deactivate`/`activate` |
+| Idempotency | ✅ تطبيق ثانٍ: NOTICE فقط |
+| Rollback | ✅ `rollback/003_user_active_flag_rollback.sql` (يعيد CHECK بـ`NOT VALID` حفاظاً على سجل التدقيق) |
+| الإنتاج `ihris_manage` | ❌ لم تُمسّ |
+| الحالة في الإنتاج | ⏳ **pending** |
+
+> **تنويه احتفاظ:** لا يُحذف `user_audit_log` عند التراجع، حتى لو رجع CHECK إلى قيمه القديمة.
+
+## تفاصيل ترحيل 004 (ADR-005)
+
+| البند | القيمة |
+|-------|--------|
+| القاعدة | `ihris_test_gap001` فقط |
+| المحتوى | `users.tokenVersion INTEGER NOT NULL DEFAULT 1` |
+| Idempotency | ✅ تطبيق ثانٍ: NOTICE فقط |
+| Rollback | ✅ `rollback/004_user_token_version_rollback.sql` |
+| الإنتاج `ihris_manage` | ❌ لم تُمسّ |
+| الحالة في الإنتاج | ⏳ **pending** |
+
+## تفاصيل ترحيل 005 (GAP-004/005/006)
+
+| البند | القيمة |
+|-------|--------|
+| القاعدة | `ihris_test_gap001` فقط |
+| المحتوى | `facilities.version INTEGER NOT NULL DEFAULT 1` + `facility_audit_log` + 3 فهارس |
+| Idempotency | ✅ تطبيق ثانٍ: NOTICE فقط |
+| Rollback | ✅ `rollback/005_facility_version_and_audit_rollback.sql` |
+| الإنتاج `ihris_manage` | ❌ لم تُمسّ |
+| الحالة في الإنتاج | ⏳ **pending** |
+
+> **تنويه احتفاظ:** `facility_audit_log` بلا FK إلى `facilities` عمداً، ليبقى سجل التدقيق
+> بعد الحذف الفيزيائي للمنشأة.
 
 ## ملاحظة تصحيحية مهمة
 

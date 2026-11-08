@@ -1,6 +1,6 @@
-# أدلة الاختبار — GAP-001 + GAP-002/GAP-003
+# أدلة الاختبار — GAP-001 + GAP-002/003 + Sprint 2.5 + GAP-004/005/006
 
-> آخر تحديث: 05–06 نوفمبر 2026 — Sprint 1.5b/1.5c + Sprint 2.
+> آخر تحديث: 06 نوفمبر 2026 — Sprint 1.5b/1.5c + Sprint 2 + Sprint 2.5 + Sprint 3.
 > كل رقم أدناه مأخوذ من تشغيل فعلي، لا من تقدير.
 
 ## 1. تصحيح تاريخي
@@ -17,7 +17,7 @@
 | Jest | 29.7.0 + ts-jest |
 | إعداد Jest | `forceExit: true`, `testTimeout: 30000`, `maxWorkers: 1` |
 
-## 3. Backend — 73/73 ✅
+## 3. Backend — 108/108 ✅ (13 suites)
 
 الأمر:
 
@@ -26,27 +26,31 @@ DATABASE_URL=postgresql://ihris:***@localhost:5432/ihris_test_gap001 \
 npx jest --runInBand
 ```
 
-المخرج الفعلي (بعد Sprint 2):
+المخرج الفعلي (بعد Sprint 3):
 
 ```text
-PASS src/__tests__/user.test.ts (11.99 s)
-PASS src/__tests__/report.test.ts
+PASS src/__tests__/user.lifecycle.test.ts
+PASS src/__tests__/facility.test.ts
+PASS src/__tests__/user.test.ts
 PASS src/__tests__/user.security.test.ts
 PASS src/__tests__/auth.test.ts
+PASS src/__tests__/report.test.ts
+PASS src/__tests__/facility.security.test.ts
 PASS src/__tests__/person.test.ts
 PASS src/__tests__/position.test.ts
 PASS src/__tests__/user.validation.test.ts
+PASS src/__tests__/facility.validation.test.ts
 PASS src/__tests__/report.engine.test.ts
 PASS src/__tests__/report.validation.test.ts
 
-Test Suites: 9 passed, 9 total
-Tests:       73 passed, 73 total
+Test Suites: 13 passed, 13 total
+Tests:       108 passed, 108 total
 ```
 
 ### 3.1 محرك التقارير — 12/12
 
 ```text
-√ 1) يسترجع الصفوف المطابقة بأعمدتها الحقيقية
+√ 1) يسترجع الصفوف المطابقة بأعمدةها الحقيقية
 √ 2) يطبّق فلتر مساواة على عمود آخر
 √ 3) يحلّ المعاملات المسماة (named params) بأمان
 √ 4) يدعم معامل in مع قيم متعددة
@@ -63,18 +67,18 @@ Tests:       73 passed, 73 total
 ### 3.2 تكامل API — 12/12
 
 ```text
-√ ينشئ تعريف تقرير ثم يعيده بنفس القيم المخزّنة (33 ms)
-√ ينفّذ التقرير ويعيد صفوفاً حقيقية من قاعدة البيانات (54 ms)
-√ يحلّ معاملات وقت التشغيل (runtime params) (23 ms)
-√ يصدّر CSV ببيانات حقيقية (27 ms)
-√ يصدّر PDF صالحاً (45 ms)
-√ يرفض إنشاء تقرير بتعريف خطير (6 ms)
-√ يرفض إنشاء تقرير بجدول خارج القائمة البيضاء (6 ms)
-√ يرفض تنفيذ تقرير مُخترَق التعريف (جدول غير مسموح) (23 ms)
-√ يرفض المستخدم غير المخوّل (بلا توكن) بـ401 (8 ms)
-√ يرفض تعريفاً خاطئاً (اسم مفقود) بـ400 ورسالة واضحة (5 ms)
-√ يعدّل تعريف تقرير ويعيد الإصدار المحدَّث (31 ms)
-√ يحذف تعريف تقرير بأمان (204 ثم يختفي من القائمة) (32 ms)
+√ ينشئ تعريف تقرير ثم يعيده بنفس القيم المخزّنة
+√ ينفّذ التقرير ويعيد صفوفاً حقيقية من قاعدة البيانات
+√ يحلّ معاملات وقت التشغيل (runtime params)
+√ يصدّر CSV ببيانات حقيقية
+√ يصدّر PDF صالحاً
+√ يرفض إنشاء تقرير بتعريف خطير
+√ يرفض إنشاء تقرير بجدول خارج القائمة البيضاء
+√ يرفض تنفيذ تقرير مُخترَق التعريف (جدول غير مسموح)
+√ يرفض المستخدم غير المخوّل (بلا توكن) بـ401
+√ يرفض تعريفاً خاطئاً (اسم مفقود) بـ400 ورسالة واضحة
+√ يعدّل تعريف تقرير ويعيد الإصدار المحدَّث
+√ يحذف تعريف تقرير بأمان (204 ثم يختفي من القائمة)
 ```
 
 ### 3.3 تحقق التعريف — 7/7
@@ -104,7 +108,7 @@ PASS src/__tests__/user.test.ts
   √ 12) المستخدم المحذوف لا يستطيع تسجيل الدخول → 401
 ```
 
-### 3.5 اختبارات الأمان — 10/10
+### 3.5 اختبارات الأمان (مستخدمون) — 10/10
 
 ```text
 PASS src/__tests__/user.security.test.ts
@@ -120,11 +124,84 @@ PASS src/__tests__/user.security.test.ts
   √ S10) Audit بلا password/hash
 ```
 
-### 3.6 اختبارات وحدة التحقق — 9/9
+### 3.6 اختبارات وحدة التحقق (مستخدمون) — 9/9
 
 ```text
 PASS src/__tests__/user.validation.test.ts
 Tests: 9 passed, 9 total
+```
+
+### 3.7 Sprint 2.5 — BLK-008 + ADR-005 — 11/11
+
+```text
+PASS src/__tests__/user.lifecycle.test.ts
+  BLK-008 — تعطيل/تفعيل الحساب (6)
+  √ 1) Admin يعطّل مستخدماً → 200 + isActive=false + audit + tokenVersion++
+  √ 2) Admin يعيد تفعيل مستخدم → 200 + isActive=true + audit
+  √ 3) المستخدم المعطّل يحاول تسجيل الدخول → 401 برسالة معطّل
+  √ 4) مستخدم عادي يحاول تعطيل آخر → 403
+  √ 5) تعطيل مستخدم له سجلات مرتبطة → 200 (مسموح، بخلاف الحذف)
+  √ 6) المستخدم المعطّل يظهر في قائمة المستخدمين مع isActive=false
+  ADR-005 — إبطال JWT عبر tokenVersion (5)
+  √ 1) تغيير الدور → الرمز القديم يُرفض
+  √ 2) الحذف المنطقي → الرمز القديم يُرفض
+  √ 3) التعطيل → الرمز القديم يُرفض
+  √ 4) الاستعادة → رمز جديد يعمل والقديم يُرفض
+  √ 5) الرمز الحالي (لم يتغير شيء) يعمل
+
+Tests: 11 passed, 11 total
+```
+
+### 3.8 Sprint 3 — سيناريوهات قبول GAP-004/005/006 — 10/10
+
+```text
+PASS src/__tests__/facility.test.ts
+  GAP-004 — إضافة منشأة
+  √ 1) admin ينشئ منشأة كاملة → 201 + audit
+  √ 2) hr_staff يحاول إنشاء منشأة → 403
+  √ 3) منشأة باسم مكرر → 409
+  √ 4) country → district → county cascade يعمل
+  GAP-005 — تعديل منشأة
+  √ 5) hr_manager يعدّل منشأة → 200 + audit
+  √ 6) تعديل بـ version خاطئ → 409
+  حذف المنشأة
+  √ 7) admin يحذف منشأة بلا positions → 200
+  √ 8) admin يحذف منشأة لها positions → 422
+  GAP-006 — عرض تفاصيل منشأة
+  √ 9) عرض تفاصيل منشأة → 200 + كل الحقول + positions
+  √ 10) IDOR: hr_staff يقرأ منشأة → 200 (قراءة عامة)
+
+Tests: 10 passed, 10 total
+```
+
+### 3.9 Sprint 3 — أمان المنشآت — 8/8
+
+```text
+PASS src/__tests__/facility.security.test.ts
+  √ S1) hr_staff يحاول الإنشاء → 403
+  √ S2) hr_staff يحاول التعديل → 403
+  √ S3) hr_staff يحاول الحذف → 403
+  √ S4) حذف بلا مصادقة → 401
+  √ S5) Mass assignment عند الإنشاء → 400
+  √ S6) مرجع جغرافي غير موجود → 400
+  √ S7) معرّف غير رقمي → 400
+  √ S8) SQL injection في البحث → آمن والجدول سليم
+
+Tests: 8 passed, 8 total
+```
+
+### 3.10 Sprint 3 — وحدة Zod للمنشآت — 6/6
+
+```text
+PASS src/__tests__/facility.validation.test.ts
+  √ 1) يقبل منشأة كاملة صحيحة
+  √ 2) يرفض اسماً فارغاً
+  √ 3) يرفض غياب أحد حقول الموقع الأربعة (BR-097)
+  √ 4) يرفض الحقول غير المعروفة (Mass Assignment)
+  √ 5) التعديل يتطلب version ويرفض جسمًا بلا حقول
+  √ 6) معرّف المسار يرفض الصفر والسالب وغير الرقمي
+
+Tests: 6 passed, 6 total
 ```
 
 ## 4. Frontend — 3/3 ✅
@@ -153,13 +230,6 @@ frontend: npm ci → added 265 packages
 ## 7. دليل SQL فعلي
 
 ```text
-prisma:query SELECT column_name FROM information_schema.columns
-  WHERE table_schema = 'public' AND table_name = $1
-prisma:query BEGIN
-prisma:query SET LOCAL statement_timeout = 30000
-prisma:query SELECT "id", "name", "code" FROM "countries" ORDER BY "id" ASC LIMIT $1
-prisma:query COMMIT
-
 SQL: SELECT "id", "name", "code" FROM "countries" ORDER BY "id" ASC LIMIT $1
 COLUMNS: ["id","name","code"]
 ROW_COUNT: 5
@@ -167,20 +237,51 @@ PARAM_COUNT: 1
 ROWS: الجمهورية اليمنية / مصر / السعودية / الإمارات / الأردن
 ```
 
-## 8. الخلاصة
+## 8. التحقق من الترحيلات (003/004/005)
+
+| الترحيل | تطبيق | إعادة تطبيق (idempotent) | rollback | إعادة تطبيق |
+|---------|-------|--------------------------|----------|-------------|
+| 003 `isActive` | ✅ | ✅ | ✅ | ✅ |
+| 004 `tokenVersion` | ✅ | ✅ | ✅ | ✅ |
+| 005 `facility` | ✅ | ✅ | ✅ | ✅ |
+
+تحقق مباشر بعد الإعادة:
+
+```text
+users:       isActive, tokenVersion موجودان
+users index: idx_users_is_active_deleted_at موجود
+facilities:  version موجود
+table:       facility_audit_log موجود
+CHECK:       user_audit_log_action_check يقبل deactivate/activate
+```
+
+## 9. التحقق من `ihris_manage` (لم تُمسّ)
+
+```text
+user_new_cols    | 0
+user_audit       | (null)
+facility_version | 0
+facility_audit   | (null)
+```
+
+## 10. الخلاصة
 
 | الفئة | العدد | ناجح | فاشل |
 |-------|-------|-------|------|
-| Backend (Sprint 1.5 + Sprint 2) | 73 | 73 | 0 |
+| Backend (Sprint 1.5 + 2 + 2.5 + 3) | 108 | 108 | 0 |
 | Frontend | 3 | 3 | 0 |
-| **الإجمالي** | **76** | **76** | **0** |
+| **الإجمالي** | **111** | **111** | **0** |
 | TypeScript | 2 مشروع | 2 | 0 |
-| ترحيل 002 (idempotency/rollback) | 4 خطوات | 4 | 0 |
+| ترحيلات 003/004/005 (idempotency/rollback) | 12 خطوة | 12 | 0 |
 
-## 9. قيود الاختبار
+> Regression Sprint 2.5 (87/87) محقَّق داخل الـ108 الحالية:
+> 73 سابق + 11 جديد + 3 frontend = 87، ثم + 24 من Sprint 3 = 111.
+
+## 11. قيود الاختبار
 
 | القيد | الأثر |
 |-------|-------|
-| اختبارات `person`/`position` تمسح بياناتها (`deleteMany`) | تعمل على `ihris_test_gap001` فقط، لا `ihris_manage` |
+| اختبارات `person`/`position`/`facility` تمسح بياناتها | تعمل على `ihris_test_gap001` فقط، لا `ihris_manage` |
 | Rate limit في الذاكرة | لا يُختبر عبر عمليات متعددة |
 | PDF لا يشكّل العربية | يُتحقق من صلاحية الملف (`%PDF-`) لا من صحة العرض البصري |
+| GAP-L-002 | لم يُختبر Arabic PDF أو Excel لأنهما غير منفّذين |

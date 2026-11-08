@@ -1,51 +1,64 @@
-# Sprint الحالي — Sprint 2 (GAP-002 + GAP-003)
+# Sprint الحالي — Sprint 3 (إدارة المنشآت) — مكتمل
 
 ## معلومات Sprint
 
 | البند | القيمة |
 |-------|--------|
-| الاسم | Sprint 2 — إدارة المستخدمين (تعديل + حذف/استعادة) |
-| التاريخ | 05–06 نوفمبر 2026 |
-| الحالة | ✅ **مكتمل — GAP-002 وGAP-003 مغلقتان** |
+| الاسم | Sprint 3 — إدارة المنشآت (GAP-004 + GAP-005 + GAP-006) |
+| التاريخ | 06 نوفمبر 2026 |
+| الحالة | ✅ **مكتمل — GAP-004/005/006 مغلقة** |
 | reviewer | Lead Implementation Engineer |
-| الفرع | `feature/GAP-002-003-user-management` |
-| الهدف | إغلاق GAP-002/GAP-003 وفق ADR-003 حرفياً |
+| الفرع | `feature/GAP-004-005-006-facility-management` |
+| الهدف | إغلاق 3 فجوات مترابطة وفق ADR-006 |
 
-## نتيجة بوابة Sprint 2
+## Sprint 2.5 (سبقه — مكتمل)
 
 | البند | الحالة | الدليل |
 |-------|--------|--------|
-| 1. 12/12 سيناريو قبول | ✅ | `gaps/GAP-002/verification.md` + `gaps/GAP-003/verification.md` |
-| 2. اختبارات الأمان | ✅ 10/10 | `user.security.test.ts` |
-| 3. Regression | ✅ 73 backend + 3 frontend | `07-TEST-EVIDENCE.md` |
-| 4. Migration idempotent + rollback | ✅ | `applied/README.md` (002) |
-| 5. قاعدة الاختبار محفوظة | ✅ | `ihris_test_gap001` + تنويه في `applied/README.md` |
-| 6. `ihris_manage` لم تُمسّ | ✅ | كل الأوامر على قاعدة الاختبار |
+| BLK-008 (تعطيل/تفعيل) | ✅ مغلق | migration 003 + `user.lifecycle.test.ts` 6/6 |
+| ADR-005 (`tokenVersion`) | ✅ منفّذ | migration 004 + 5/5 |
+| GAP-L-002 | ⚠️ جزئية 55% (P2) | CSV ✅ / PDF إنجليزي / Excel ❌ |
+| GAP-L-003 | ✅ مكتملة | تتبع التنفيذ في الواجهة + API |
+| Regression | ✅ 84 + 3 = 87/87 | `07-TEST-EVIDENCE.md` |
+| الفرع | `feature/sprint-2.5-hardening` | — |
+
+## نتيجة بوابة Sprint 3
+
+| البند | الحالة | الدليل |
+|-------|--------|--------|
+| 1. 10/10 سيناريو قبول | ✅ | `facility.test.ts` |
+| 2. اختبارات أمان | ✅ 8/8 | `facility.security.test.ts` |
+| 3. اختبارات وحدة | ✅ 6/6 | `facility.validation.test.ts` |
+| 4. Regression | ✅ 108 backend + 3 frontend = 111/111 | `07-TEST-EVIDENCE.md` |
+| 5. Migration 005 idempotent + rollback | ✅ | `applied/README.md` |
+| 6. `ihris_manage` لم تُمسّ | ✅ | تحقق مباشر |
+| 7. ADR-006 مكتوب قبل التنفيذ | ✅ | `04-DECISIONS.md` §6 |
 
 **الخلاصة: البوابة اجتُزت ✅.**
 
-## حالة الفجوات الحرجة الثلاث
+## حالة الفجوات الثلاث
 
 | معرف | العنوان | الحالة | الملاحظة |
 |-------|---------|--------|----------|
-| GAP-001 | إنشاء تقرير مخصص | ✅ **مكتملة** | محرك حقيقي + 10/10 |
-| GAP-002 | تعديل مستخدم | ✅ **مكتملة** | 5/5 + version + audit + UI |
-| GAP-003 | حذف مستخدم | ✅ **مكتملة** | 7/7 + soft delete + restore + UI |
+| GAP-004 | إضافة منشأة | ✅ **مكتملة** | create + audit + cascade + 4 سيناريوهات |
+| GAP-005 | تعديل منشأة | ✅ **مكتملة** | update + version lock + audit + 2 سيناريوهان |
+| GAP-006 | عرض منشأة | ✅ **مكتملة** | detail + positions + 2 سيناريوهان |
 
-## ما أُنجز في Sprint 2
+## ما أُنجز في Sprint 3
 
 | # | المهمة | الحالة |
 |---|--------|--------|
-| 1 | تحليل الحالة الفعلية + FK + `user_log` | ✅ |
-| 2 | ADR-003 تنفيذي (A+B + user_audit_log + version) | ✅ |
-| 3 | Migration 002 + rollback + idempotency | ✅ |
+| 1 | تحليل API/UI الحالي + BR-047..051/097 | ✅ |
+| 2 | ADR-006 (9 قرارات) | ✅ |
+| 3 | Migration 005 (`version` + `facility_audit_log`) | ✅ |
 | 4 | Prisma schema + generate/validate | ✅ |
-| 5 | `UserService` (update/softDelete/restore/listDeleted) | ✅ |
-| 6 | Validation صارم + أخطاء HTTP | ✅ |
+| 5 | `facility.validation.ts` (Zod strict + BR-097) | ✅ |
+| 6 | `facility.service.ts` (CRUD + cascade + audit + delete guard) | ✅ |
 | 7 | Controller + Routes + RBAC | ✅ |
-| 8 | واجهة Users + UserForm + DeletedUsers | ✅ |
-| 9 | 12 قبول + 10 أمان + 9 وحدة | ✅ |
-| 10 | Regression + توثيق الإغلاق | ✅ |
+| 8 | `Facilities.tsx` + `FacilityDetail.tsx` + `FacilityForm.tsx` | ✅ |
+| 9 | Routes + nav | ✅ |
+| 10 | 10 قبول + 8 أمان + 6 وحدة | ✅ |
+| 11 | Regression + توثيق الإغلاق | ✅ |
 
 ## التحقق من القيود
 
@@ -54,12 +67,13 @@
 | `DB export.sql` دون تعديل | ✅ | لم يُلمس |
 | قاعدة `ihris_manage` دون تعديل | ✅ | كل التنفيذ على `ihris_test_gap001` |
 | قاعدة الاختبار لم تُحذف | ✅ | محفوظة للمراجعة البشرية |
-| `docs/legacy-modern-comparison/` | ✅ | ملحق A فقط (+ A-2) |
-| نطاق Sprint 2 | ✅ | GAP-002 + GAP-003 فقط |
-| ADR-003 | ✅ | منفّذ |
+| `docs/legacy-modern-comparison/` | ✅ | لم يُلمس |
+| نطاق Sprint 3 | ✅ | GAP-004/005/006 فقط |
+| ADR-006 | ✅ | منفّذ |
 
 ## الخطوة التالية
 
-**لا تبدأ Sprint 3 قبل اعتماد تقرير Sprint 2.** عند الاعتماد:
-1. حسم BLK-007 (`user_log`) وBLK-008 (`isActive`).
-2. اختيار الفجوات التالية من `CORRECTED-GAP-REGISTRY.md` (41 متبقية).
+**لا تبدأ Sprint 4 قبل اعتماد تقرير Sprint 2.5 + Sprint 3.** عند الاعتماد:
+1. حسم BLK-009 (`regions.countryId`) وBLK-010 (`facilities.code`).
+2. اختيار الفجوات التالية من `CORRECTED-GAP-REGISTRY.md` (36 متبقية).
+3. BLK-007 (`user_log`) مؤجل إلى P2 — لا يبدأ الآن.

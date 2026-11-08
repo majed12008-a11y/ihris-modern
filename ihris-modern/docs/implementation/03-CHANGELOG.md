@@ -1,5 +1,42 @@
 # سجل التغييرات (Changelog)
 
+## [0.5.0] - 06 نوفمبر 2026 — Sprint 2.5 + Sprint 3
+
+### أُغلق
+- **BLK-008**: ✅ آلية تعطيل/تفعيل الحساب (`isActive` + مسارين admin + 401 + badge + audit).
+- **GAP-004**: ✅ مكتملة — إضافة منشأة (backend + UI + cascade + audit).
+- **GAP-005**: ✅ مكتملة — تعديل منشأة (version lock + audit).
+- **GAP-006**: ✅ مكتملة — عرض تفاصيل منشأة + الوظائف المرتبطة.
+- **GAP-L-003**: ✅ مكتملة — تتبع استخدام التقارير معروض في الواجهة وAPI موجود.
+- **RISK-007**: ✅ مغلق (واجهة إدارة المنشآت).
+- **RISK-021**: ✅ مغلق (تتبع استخدام التقارير).
+
+### أضيف
+- ترحيل `003_user_active_flag.sql` — `isActive` + فهرس `(isActive, deletedAt)` + توسيع CHECK للتدقيق.
+- ترحيل `004_user_token_version.sql` — `tokenVersion` لإبطال JWT.
+- ترحيل `005_facility_version_and_audit.sql` — `facilities.version` + `facility_audit_log` + فهارس.
+- ملفات Rollback مطابقة للثلاثة + إثبات idempotency وإعادة التطبيق.
+- ADR-005 (إبطال JWT عبر `tokenVersion`) وADR-006 (تصميم إدارة المنشآت).
+- `PUT /api/users/:id/deactivate` و`PUT /api/users/:id/activate` (admin فقط).
+- `facility.validation.ts` — Zod strict + BR-097 + version.
+- إعادة كتابة `facility.service.ts` — pagination + search + cascade meta + uniqueness + version lock + audit + delete guard.
+- `/api/facilities/meta/{countries,districts,counties,regions,facility-types}`.
+- `Facilities.tsx` + `FacilityDetail.tsx` + إعادة كتابة `FacilityForm.tsx` + routes + nav.
+- اختبارات: 11 (Sprint 2.5) + 10 قبول + 8 أمان + 6 وحدة (Sprint 3) = **35 اختباراً جديداً**.
+
+### صُحِّح
+- `middleware/auth.ts`: تحقق DB لكل طلب (tokenVersion/isActive/deletedAt) بدل الاعتماد على الـ JWT فقط.
+- الدور يُقرأ من DB لا من الرمز → تغيير الدور يسري فوراً.
+- `Dashboard.tsx`: `facilitiesRes.data.total` بدل `.length` بعد تحويل القائمة إلى paginated.
+- رسالة رفض حذف المستخدم ذات السجلات تُذكر "يمكنك تعطيله" مع إمكانية فعلية.
+
+### ملاحظات
+- **GAP-L-002** جزئية 55% ومؤجلة P2 (Arabic PDF + Excel).
+- **BLK-007** (`user_log`) مؤجل P2 — لم يبدأ.
+- **BLK-009** (`regions` بلا `countryId`) و**BLK-010** (لا `code` في `facilities`) مفتوحان.
+- لا إبطال JWT لكل جهاز (Refresh Tokens في P3).
+- التقدم: **7/44 = 15.9%**.
+
 ## [0.4.0] - 05 نوفمبر 2026 — Sprint 2 (إغلاق GAP-002 + GAP-003)
 
 ### أُغلق

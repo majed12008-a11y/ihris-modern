@@ -111,5 +111,5 @@ Tests:       73 passed, 73 total
 ## 10. قيود موثقة
 
 - لا يوجد Purge بعد 90 يوماً (P3).
-- لا يوجد حقل `isActive` مستقل (BLK-008).
+- ~~لا يوجد حقل `isActive` مستقل (BLK-008).~~ **أُغلق في Sprint 2.5** — انظر `gaps/GAP-002/README.md` و`user.lifecycle.test.ts`.
 - `user_log` القديم (login/logout/activity) مفقود (BLK-007 / RISK-013) — خارج نطاق Sprint 2.

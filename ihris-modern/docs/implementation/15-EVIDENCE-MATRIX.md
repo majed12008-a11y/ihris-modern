@@ -44,6 +44,23 @@
 | EVID-212 | صفحة المحذوفين | كود الواجهة | `frontend/src/pages/DeletedUsers.tsx` | FACT | عرض + استعادة + عدّاد 30 يوماً | مؤكدة |
 | EVID-213 | مسارات الواجهة والملف الشخصي | كود الواجهة | `frontend/src/App.tsx` + `MainLayout.tsx` | FACT | `users/:id/edit`, `users/deleted`, ملفي الشخصي | مؤكدة |
 | EVID-214 | نوع هوية المستخدم | كود الخلفية | `backend/src/middleware/auth.ts` | FACT | `AuthUser` + `AuthRequest` | مؤكدة |
+| EVID-215 | عمود `isActive` | Prisma Schema | `backend/prisma/schema.prisma` | FACT | boolean افتراضي true + فهرس مركّب | مؤكدة |
+| EVID-216 | عمود `tokenVersion` | Prisma Schema | `backend/prisma/schema.prisma` | FACT | int افتراضي 1 | مؤكدة |
+| EVID-217 | ترحيل 003 | ملف SQL | `migrations/pending/003_user_active_flag.sql` | FACT | idempotent + rollback + توسيع CHECK | مؤكدة |
+| EVID-218 | ترحيل 004 | ملف SQL | `migrations/pending/004_user_token_version.sql` | FACT | idempotent + rollback | مؤكدة |
+| EVID-219 | تحقق DB للمصادقة | كود الخلفية | `backend/src/middleware/auth.ts` | FACT | tokenVersion/isActive/deletedAt لكل طلب | مؤكدة |
+| EVID-220 | رفض دخول المعطّل | كود الخلفية | `backend/src/services/auth.service.ts` | FACT | `isActive=false` → 401 | مؤكدة |
+| EVID-221 | تعطيل/تفعيل | كود الخلفية | `backend/src/services/user.service.ts` | FACT | deactivate/activate + audit + version | مؤكدة |
+| EVID-222 | مسارا التعطيل | كود الخلفية | `backend/src/routes/user.ts` | FACT | `PUT /:id/deactivate` + `/:id/activate` | مؤكدة |
+| EVID-223 | تبويبات حالة المستخدم | كود الواجهة | `frontend/src/pages/Users.tsx` | FACT | الكل/النشطون/المعطّلون + badge | مؤكدة |
+| EVID-224 | ترحيل 005 | ملف SQL | `migrations/pending/005_facility_version_and_audit.sql` | FACT | version + facility_audit_log | مؤكدة |
+| EVID-225 | نموذج FacilityAuditLog | Prisma Schema | `backend/prisma/schema.prisma` | FACT | بلا FK + 3 فهارس | مؤكدة |
+| EVID-226 | تحقق المنشآت | كود الخلفية | `backend/src/services/facility.validation.ts` | FACT | Zod strict + BR-097 | مؤكدة |
+| EVID-227 | خدمة المنشآت | كود الخلفية | `backend/src/services/facility.service.ts` | FACT | CRUD + cascade + audit + delete guard | مؤكدة |
+| EVID-228 | نقاط نهاية المنشآت | كود الخلفية | `backend/src/routes/facility.ts` | FACT | CRUD + 5 meta + RBAC | مؤكدة |
+| EVID-229 | قائمة المنشآت | كود الواجهة | `frontend/src/pages/Facilities.tsx` | FACT | بحث + ترقيم + إجراءات + modal حذف | مؤكدة |
+| EVID-230 | تفاصيل المنشأة | كود الواجهة | `frontend/src/pages/FacilityDetail.tsx` | FACT | كل الحقول + الوظائف المرتبطة | مؤكدة |
+| EVID-231 | نموذج المنشأة | كود الواجهة | `frontend/src/pages/FacilityForm.tsx` | FACT | cascade API-driven + prefill + version | مؤكدة |
 
 ---
 
@@ -73,6 +90,16 @@
 | EVID-T-020 | إثبات Soft Delete | PostgreSQL + Prisma | FACT | الصف موجود و`deletedAt` مضبوط |
 | EVID-T-021 | نافذة الاستعادة | `user.test.ts` | FACT | ≤30 يوم 200، 40 يوم 422 |
 | EVID-T-022 | منع دخول المحذوف | `user.test.ts` | FACT | 401 بعد الحذف | مؤكدة |
+| EVID-T-023 | تعطيل/تفعيل (6) | `user.lifecycle.test.ts` | FACT | 200 + audit + 401 + 403 + badge | مؤكدة |
+| EVID-T-024 | إبطال JWT (5) | `user.lifecycle.test.ts` | FACT | role change/delete/deactivate/restore/current | مؤكدة |
+| EVID-T-025 | Regression Sprint 2.5 | backend + frontend | FACT | 84/84 + 3/3 = 87/87 | مؤكدة |
+| EVID-T-026 | تصنيف GAP-L-003 | `ReportDetail.tsx` + `report.ts` | FACT | سجل التنفيذ معروض + `/executions` موجود | مؤكدة |
+| EVID-T-027 | قبول GAP-004/005/006 (10) | `facility.test.ts` | FACT | 10/10 كما في 07-TEST-EVIDENCE §3.8 | مؤكدة |
+| EVID-T-028 | أمان المنشآت (8) | `facility.security.test.ts` | FACT | 403/401/400/422 + injection + mass assignment | مؤكدة |
+| EVID-T-029 | وحدة Zod للمنشآت (6) | `facility.validation.test.ts` | FACT | strict + BR-097 + version | مؤكدة |
+| EVID-T-030 | Regression نهائي | backend + frontend | FACT | 108/108 + 3/3 = 111/111 | مؤكدة |
+| EVID-T-031 | ترحيلات 003/004/005 | psql على `ihris_test_gap001` | FACT | apply/reapply/rollback/reapply | مؤكدة |
+| EVID-T-032 | `ihris_manage` سليمة | psql على `ihris_manage` | FACT | 0 أعمدة/جداول جديدة | مؤكدة |
 
 ---
 
@@ -80,13 +107,14 @@
 
 | النوع | العدد | النسبة المئوية |
 |------|-------|-------------|
-| FACT (حقيقة مثبتة) | 54 | 100% |
+| FACT (حقيقة مثبتة) | 71 | 100% |
 | INFERENCE (استنتاج) | 0 | 0% |
 | ASSUMPTION (افتراض) | 0 | 0% |
 | UNKNOWN (غير معروفة) | 0 | 0% |
-| **الإجمالي** | **54 دليل** | **100%** |
+| **الإجمالي** | **71 دليل** | **100%** |
 
 > تصحيح Sprint 1.5b/1.5c: لم يبقَ أي دليل اختبار UNKNOWN أو INFERENCE؛ كلها نُفِّذت فعلياً.
+> Sprint 2.5 وSprint 3 أضافا 17 دليلاً جديداً (EVID-215..231 + EVID-T-023..032).
 
 ---
 
@@ -96,7 +124,10 @@
 |-------|--------|
 | عدد الأدلة لـ GAP-001 | 28 دليل |
 | عدد الأدلة لـ GAP-002/GAP-003 | 26 دليل |
-| عدد الأدلة من النوع FACT | 54 دليل |
+| عدد الأدلة لـ Sprint 2.5 (BLK-008 + ADR-005) | 9 أدلة |
+| عدد الأدلة لـ GAP-004/005/006 | 8 أدلة |
+| عدد الأدلة من النوع FACT | 71 دليل |
 | نسبة الأدلة المؤكدة | 100% |
 | قاعدة الاختبار | `ihris_test_gap001` |
 | سجل الترحيل | `migrations/applied/README.md` |
+| التقدم | 7/44 = 15.9% |

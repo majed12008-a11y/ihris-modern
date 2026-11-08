@@ -439,3 +439,139 @@
 
 **الحالة:** مقبول ومُنفَّذ ومُختبَر.
 **الأدلة:** `report.engine.test.ts` (12/12) + `report.test.ts` (12/12) + regression 42/42.
+
+---
+
+## ADR-005: إبطال رموز JWT عبر `tokenVersion`
+
+### 5.1 الحالة
+
+**مُنفَّذ في Sprint 2.5** (فرع `feature/sprint-2.5-hardening`) — أغلق ثغرة بقاء
+الرموز صالحة بعد الحذف/التعطيل/تغيير الدور.
+
+الملفات:
+- `backend/src/lib/jwt.ts` — `tokenVersion` ضمن الـ payload
+- `backend/src/middleware/auth.ts` — تحقق DB لكل طلب
+- `backend/src/services/auth.service.ts` — إصدار الرمز + رفض المعطّل
+- `backend/src/services/user.service.ts` — زيادة النسخة عند الحذف/التعطيل/تغيير الدور
+- `migrations/pending/004_user_token_version.sql` + rollback
+
+### 5.2 التصميم
+
+| البند | القرار |
+|-------|--------|
+| الحقل | `users.tokenVersion INTEGER NOT NULL DEFAULT 1` |
+| محتوى JWT | `{ userId, username, role, tokenVersion, iat, exp }` |
+| التحقق | بعد `jwt.verify` يُقرأ المستخدم من DB: يجب `jwt.tokenVersion === user.tokenVersion` |
+| الحذف المنطقي | `tokenVersion++` |
+| التعطيل | `tokenVersion++` |
+| تغيير الدور | `tokenVersion++` |
+| التفعيل | بدون زيادة (الرموز القديمة مبطلة أصلاً) |
+| الاستعادة | بدون زيادة (أُبطلت عند الحذف) |
+| حالات الرفض | مستخدم محذوف / معطّل / نسخة غير مطابقة → **401** |
+| مصدر الدور | DB وليس الـ JWT (يسري تغيير الدور فوراً) |
+
+### 5.3 المزايا
+
+1. **إبطال فوري** بلا انتظار انتهاء صلاحية الرمز.
+2. **بلا بنية تحتية إضافية** — لا Redis ولا قائمة إبطال.
+3. **بسيط وقابل للتدقيق** — عمود واحد + مقارنة واحدة.
+4. **يغطي الحذف والتعطيل وتغيير الدور** في مسار واحد.
+
+### 5.4 القيود (مُوثَّقة بصراحة)
+
+| القيد | الأثر |
+|-------|-------|
+| استعلام إضافي لكل طلب مصادَق | قراءة بالمفتاح الأساسي (`id`) — تكلفة منخفضة ومقبولة |
+| لا إبطال لكل جهاز | إبطال كل الرموز معاً؛ لا يمكن طرد جهاز واحد فقط |
+| الرموز الصادرة قبل النشر بلا `tokenVersion` | تُرفض (401) — سلوك مقصود وآمن |
+| يعتمد على DB في كل طلب | تعطّل DB يمنع المصادقة (مقبول) |
+
+### 5.5 متى نرقّي إلى Refresh Tokens؟
+
+مؤجل إلى **P3**، ويصبح مطلوباً إذا احتجنا:
+- إبطالاً لكل جهاز/جلسة على حدة،
+- جلسات طويلة مع تدوير الرموز،
+- تخفيف الحمل عن DB (تخزين حالة الجلسة).
+
+### 5.6 بوابة القرار
+
+- 11/11 اختبار Sprint 2.5 (6 تعطيل/تفعيل + 5 إبطال JWT).
+- Regression: 84 backend + 3 frontend = 87/87.
+- الترحيل 004: idempotent + rollback مُختبَر.
+
+---
+
+## ADR-006: تصميم إدارة المنشآت (GAP-004/005/006)
+
+### 6.1 الحالة
+
+**مُنفَّذ في Sprint 3** (فرع `feature/GAP-004-005-006-facility-management`).
+
+الملفات:
+- `backend/src/services/facility.service.ts` — CRUD + cascade + audit + delete guard
+- `backend/src/services/facility.validation.ts` — Zod صارم
+- `backend/src/controllers/facility.controller.ts` + `routes/facility.ts`
+- `frontend/src/pages/Facilities.tsx` + `FacilityDetail.tsx` + `FacilityForm.tsx`
+- `migrations/pending/005_facility_version_and_audit.sql` + rollback
+
+### 6.2 القرارات التسعة
+
+| # | السؤال | القرار | التنفيذ |
+|---|--------|--------|---------|
+| 1 | Cascade UI للعلاقات الجغرافية | نعم | `country → district → county` عبر `/api/facilities/meta/*`؛ `region` قائمة مستقلة |
+| 2 | Validation | Zod صارم + رسائل عربية | `.strict()` + `formatFacilityZodErrors` |
+| 3 | Soft delete للمنشآت | لا — حذف فيزيائي | يُمنع إذا وُجدت `positions` → 422 |
+| 4 | Audit | نعم لكل إنشاء/تعديل/حذف | `facility_audit_log` بلا FK |
+| 5 | Pagination | نعم 20/صفحة | `page`/`limit` مع سقف 100 |
+| 6 | Search | بالاسم | `contains` + `mode: insensitive` |
+| 7 | Mass assignment | مرفوض | `.strict()` يرفض `id/version/createdAt/...` |
+| 8 | IDOR | لا ينطبق (قراءة عامة) | القراءة لكل المصادَقين؛ الكتابة بالأدوار |
+| 9 | الأدوار | admin + hr_manager: كتابة، hr_staff: قراءة، admin: حذف | `requireRole` على المسارات |
+
+### 6.3 BR-097 والاتساق الجغرافي
+
+- **BR-097:** المنشأة يجب أن يكون لها دولة + محافظة (district) + مديرية (county) + منطقة (region).
+  - عند الإنشاء: الأربعة إلزامية.
+  - عند التعديل: تُتحقق فقط إذا مُسّ أي حقل موقع (حفاظاً على تعديل البيانات القديمة).
+- **اتساق التسلسل:** `district.countryId === countryId` و`county.districtId === districtId`،
+  وإلا **400** برسالة عربية واضحة.
+- **المنطقة (region):** جدول `regions` لا يحوي `countryId`، لذا لا يمكن ربطها بالدولة
+  كما اقترح التصميم الأصلي. سُجِّل **BLK-009** ولم يُخترع ربط غير موجود.
+
+### 6.4 الحذف والتدقيق
+
+| البند | القرار |
+|-------|--------|
+| نوع الحذف | فيزيائي (Hard Delete) — نفس نهج النظام القديم |
+| شرط الحذف | `positions.count(facilityId) === 0` وإلا **422** |
+| شبكة أمان | قيد FK من `positions` يُترجم إلى 422 عند السباق |
+| Audit | `facility_audit_log (facilityId, action, changedBy, changedAt, oldValues, newValues)` |
+| بقاء السجل | لا FK إلى `facilities` → يبقى بعد الحذف |
+
+### 6.5 نقاط النهاية
+
+| الطريقة | المسار | الصلاحية | النجاح |
+|---------|--------|----------|--------|
+| GET | `/api/facilities` | مصادَق | 200 + `{data,total,page,limit,totalPages}` |
+| GET | `/api/facilities/:id` | مصادَق | 200 + كل الحقول + `positions` |
+| POST | `/api/facilities` | admin / hr_manager | 201 + audit |
+| PUT | `/api/facilities/:id` | admin / hr_manager | 200 + audit + `version++` |
+| DELETE | `/api/facilities/:id` | admin | 200 أو 422 |
+| GET | `/api/facilities/meta/countries` | مصادَق | 200 |
+| GET | `/api/facilities/meta/districts?countryId=` | مصادَق | 200 |
+| GET | `/api/facilities/meta/counties?districtId=` | مصادَق | 200 |
+| GET | `/api/facilities/meta/regions` | مصادَق | 200 |
+| GET | `/api/facilities/meta/facility-types` | مصادَق | 200 |
+
+### 6.6 القيود المعروفة
+
+1. **لا عمود `code`** في `facilities` القديمة أو الحديثة → البحث بالكود غير ممكن. **BLK-010**.
+2. **`region` غير مرتبطة بالدولة** في المخطط → cascade ثلاثي وليس رباعياً. **BLK-009**.
+3. **لا Soft Delete للمنشآت** → لا استعادة بعد الحذف (مطابق للنهج القديم).
+
+### 6.7 بوابة القرار
+
+- 10/10 سيناريوهات قبول + 8/8 أمان + 6/6 وحدة.
+- Regression: 108 backend + 3 frontend = 111/111.
+- الترحيل 005: idempotent + rollback مُختبَر.

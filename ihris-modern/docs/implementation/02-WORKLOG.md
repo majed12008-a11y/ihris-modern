@@ -144,3 +144,59 @@ Sprint 2 ينتظر اعتماد التقرير النهائي.
 
 GAP-002 وGAP-003 **مغلقتان** وفق ADR-003 حرفياً. التقدم 3/44 (6.8%).
 Sprint 3 لا يبدأ قبل اعتماد التقرير وحسم BLK-007/BLK-008.
+
+---
+
+## Sprint 2.5 — 06 نوفمبر 2026 (إصلاح عاجل)
+
+| الوقت | المهمة | الناتج | الحالة |
+|-------|--------|--------|--------|
+| 08:00 | فرع `feature/sprint-2.5-hardening` | فرع مستقل عن Sprint 2 | ✅ |
+| 08:15 | ترحيل 003 (`isActive`) + rollback | تطبيق → إعادة → rollback → إعادة | ✅ |
+| 08:35 | ترحيل 004 (`tokenVersion`) + rollback | نفس دورة التحقق | ✅ |
+| 08:50 | Prisma schema + generate/validate | `isActive`, `tokenVersion`, فهرس مركّب | ✅ |
+| 09:05 | `jwt.ts` + `middleware/auth.ts` | تحقق DB: tokenVersion/isActive/deletedAt | ✅ |
+| 09:25 | `auth.service.ts` | `tokenVersion` في الرمز + رفض المعطّل 401 | ✅ |
+| 09:45 | `UserService.deactivate/activate` | version lock + audit + tokenVersion++ | ✅ |
+| 10:05 | Validation + controller + routes | Zod strict + admin فقط | ✅ |
+| 10:25 | `user.lifecycle.test.ts` | 6 تعطيل/تفعيل + 5 إبطال JWT = 11/11 | ✅ |
+| 10:50 | `Users.tsx` | تبويبات الحالة + badge + Modal تعطيل/تفعيل | ✅ |
+| 11:10 | Regression | 84 backend + 3 frontend = 87/87 | ✅ |
+| 11:20 | فحص GAP-L-002/003 | L-002 جزئية 55% (P2)، L-003 مكتملة | ✅ |
+| 11:30 | ADR-005 | design/benefits/limits/refresh-token path | ✅ |
+| 11:40 | بوابة Sprint 2.5 | اجتُزت قبل بدء Sprint 3 | ✅ |
+
+### الخلاصة
+
+BLK-008 **مغلق**. ADR-005 منفّذ. GAP-L-002 جزئية 55% (P2)، وGAP-L-003 مكتملة.
+التقدم بعد هذه المرحلة 4/44 (GAP-L-003 تُغلق لاحقاً مع Sprint 3).
+
+---
+
+## Sprint 3 — 06 نوفمبر 2026 (GAP-004 + GAP-005 + GAP-006)
+
+| الوقت | المهمة | الناتج | الحالة |
+|-------|--------|--------|--------|
+| 12:00 | فرع `feature/GAP-004-005-006-facility-management` | فرع واحد للفجوات المترابطة | ✅ |
+| 12:15 | تحليل API/UI + BR-047..051/097 | `gaps/GAP-004..006/analysis.md` | ✅ |
+| 12:45 | ADR-006 (9 قرارات) | `04-DECISIONS.md` §6 | ✅ |
+| 13:00 | ترحيل 005 (`version` + `facility_audit_log`) | تطبيق → إعادة → rollback → إعادة | ✅ |
+| 13:20 | Prisma schema + generate | `Facility.version` + `FacilityAuditLog` + فهرس | ✅ |
+| 13:35 | `facility.validation.ts` | Zod strict + BR-097 + version | ✅ |
+| 14:00 | `facility.service.ts` | CRUD + cascade + audit + delete guard + 409 | ✅ |
+| 14:30 | Controller + routes | `/meta/*` قبل `/:id` + RBAC | ✅ |
+| 14:50 | `Facilities.tsx` + `FacilityDetail.tsx` | بحث/ترقيم/إجراءات + تفاصيل + positions | ✅ |
+| 15:20 | `FacilityForm.tsx` (إعادة كتابة) | cascade API-driven + prefill + version | ✅ |
+| 15:40 | Routes + nav | `/facilities*` + "المنشآت" | ✅ |
+| 16:00 | `facility.test.ts` | 10/10 سيناريو قبول | ✅ |
+| 16:30 | `facility.security.test.ts` | 8/8 أمان | ✅ |
+| 16:50 | `facility.validation.test.ts` | 6/6 وحدة | ✅ |
+| 17:10 | Regression كامل | 108 backend + 3 frontend = 111/111 | ✅ |
+| 17:30 | فحص `ihris_manage` | 0 أعمدة جديدة، لا جداول تدقيق | ✅ |
+| 17:50 | إغلاق الوثائق | DASHBOARD 7/44 + RISK + BLOCKERS + applied README | ✅ |
+
+### الخلاصة
+
+GAP-004/005/006 **مغلقة**. التقدم **7/44 = 15.9%** (المتوقع 6/44؛ الفرق أن GAP-L-003
+ثبت أنها مكتملة فعلاً). BLK-009 وBLK-010 مفتوحان ويحتاجان قراراً.
+
