@@ -1,16 +1,15 @@
 # العوائق (Blockers)
 
-> آخر تحديث: 06 نوفمبر 2026 — بعد Sprint 2.5 (BLK-008 + ADR-005) وSprint 3 (GAP-004/005/006).
+> آخر تحديث: 08 نوفمبر 2026 — بعد Sprint 4 (إغلاق BLK-009 + BLK-010، GAP-M-005/006/007/008/009/010).
 
 ## العوائق الحالية
 
 | معرف | العنوان | الوصف | التأثير | الأولوية | الحل المقترح | الحالة |
 |-------|---------|-------|---------|---------|-------------|---------|
-| — | (لا يوجد عائق حاجز) | جميع عوائق Sprint 1.5 وSprint 2 أُغلقت، وSprint 2.5 وSprint 3 أُغلقا بلا عوائق حاجزة | — | — | — | — |
+| — | (لا يوجد عائق حاجز) | جميع عوائق Sprint 1.5 وSprint 2 أُغلقت، وSprint 2.5 وSprint 3 وSprint 4 أُغلقت بلا عوائق حاجزة | — | — | — | — |
 | BLK-006 | عيوب جودة بيانات في تقارير الدراسة | التقارير الأصلية تحتوي: 22 مقابل 31 مقابل 44 فجوة، نسب تجمع 141%، 13 فجوة غير محسوبة، تناقض `GAP-007`/`GAP-FE-007`، وتصنيف خطورة غير متسق | لا يُغلق تلقائياً؛ أُضيف له ملحق تصحيحي ولا يوقف العمل | متوسطة | `docs/implementation/CORRECTED-GAP-REGISTRY.md` (العدد الكانوني 44) + إبلاغ الإدارة | مفتوح (مُعالَج بملحق) |
 | BLK-007 | `user_log` مفقود في النظام الحديث | جدول `user_log` القديم (login/logout/session_id/activity) لا يوجد له مثيل في `ihris_test_gap001` ولا في Prisma. | لا توجد مراقبة لنشاط الدخول/الخروج؛ مرتبط بـ`RISK-013` | P2 (مؤجل بقرار) | فجوة منفصلة (مرشّحة `GAP-L-005`)؛ **مؤجلة إلى P2 — لم تبدأ** | مفتوح (مؤجل P2) |
-| BLK-009 | لا رابط بين `regions` و`countries` | جدول `regions` الحديث لا يحوي `countryId` (ولا القديم حسب المخطط المتاح)، لذا لا يمكن بناء cascade `country → region`. طُلب في تصميم ADR-006 الأصلي لكنه غير موجود في المخطط. | Cascade الجغرافي ثلاثي (`country → district → county`) و`region` قائمة مستقلة؛ لا ربط غير موجود اختُرع | متوسطة | قرار بشري: إضافة `regions.countryId` + ترحيل بيانات، أو إبقاء `region` مستقلة كما هي | مفتوح (يحتاج قراراً) |
-| BLK-010 | لا عمود `code` في `facilities` | جدول `facilities` الحديث (والقديم `hippo_facility`) لا يحوي عمود كود. طُلب البحث بالاسم + الكود في ADR-006. | البحث بالكود غير ممكن؛ البحث بالاسم فقط (`contains`, case-insensitive) | منخفضة | قرار بشري: إضافة `code` فريد + ترحيل/توليد، أو الاكتفاء بالاسم | مفتوح (يحتاج قراراً) |
+
 
 ## حالات الإغلاق
 
@@ -22,6 +21,8 @@
 | BLK-004 | ✅ مغلق | 2026-11-05 | أُنشئت `ihris_test_gap001` (UTF8) واستُعيدت من `docs/implementation/backups/ihris_manage_pre-gap001-20261105-201854.dump`؛ طُبّق الترحيل وسُجِّل في `migrations/applied/README.md`. `ihris_manage` لم تُمسّ. |
 | BLK-005 | ✅ مغلق | 2026-11-05 | `npm ci` نظيف: backend 521 حزمة وfrontend 265 حزمة؛ `npm ls --depth=0` نظيف لكليهما. أُضيفت `jest-util@^29.7.0` (تبعية peer لـ`ts-jest` كانت مفقودة بعد التثبيت النظيف). |
 | **BLK-008** | ✅ **مغلق** | **2026-11-06** | **Sprint 2.5:** `users.isActive` (migration 003) + `PUT /api/users/:id/deactivate` و`/activate` (admin) + رفض دخول المعطّل (401) + badge/تبويب في `Users.tsx` + audit `deactivate`/`activate` + ورموز JWT مبطلة (ADR-005). الدليل: `user.lifecycle.test.ts` 6/6 لآلية التعطيل. |
+| **BLK-009** | ✅ **مغلق** | **2026-11-08** | **BLK-009 CLOSED — Decision: Keep regions independent.** Rationale: النظام القديم (BR-049) يعامل `region` كبُعد منفصل، ولا `countryId` في `regions`. Cascade ثلاثي `country → district → county` + `region` مستقل. **Revisit: P3** إذا أبلغ المستخدمون عن مشكلة في التسلسل الجغرافي. موثّق في ADR-007 §7.3. |
+| **BLK-010** | ✅ **مغلق** | **2026-11-08** | **فحص موثّق:** `hippo_facility` (§3.4 من `02-OLD-DATA-DICTIONARY.md`) = `id, name, facility_type, district, county, country, region` — **لا يوجد `code`**. لا إشارة لكود منشأة في BR-047..051. القرار: **not in old system — deferred**، ولا migration 006. البحث بالاسم فقط (مطابق للقديم). |
 
 ## العوائق المحتملة (لم تحدث بعد)
 
@@ -58,14 +59,27 @@
 | `ihris_manage` لم تُمسّ | ✅ | 0 أعمدة جديدة، لا `facility_audit_log`، لا `facilities.version` |
 | migration 005 idempotent + rollback | ✅ | طُبِّق ثم أُعيد ثم rollback ثم أُعيد |
 
+## بوابة Sprint 4 — النتيجة
+
+| البند | الحالة | الدليل |
+|-------|--------|--------|
+| GAP-M-008/009/010 (الدول) | ✅ | `country.*` + `Countries.tsx` + audit + version |
+| GAP-M-005/006/007 (المسميات) | ✅ | `job.*` + `Jobs.tsx` + cascade + audit + version |
+| 12/12 سيناريو قبول | ✅ | `country.test.ts` 6/6 + `job.test.ts` 6/6 |
+| 8/8 أمان + 8/8 وحدة | ✅ | `country.security.test.ts` + `job.security.test.ts` + ملفا Zod |
+| Regression 111 + 28 = 139/139 | ✅ | backend 136/136 + frontend 3/3 |
+| `ihris_manage` لم تُمسّ | ✅ | 0 أعمدة/جداول جديدة |
+| migrations 006/007 idempotent + rollback | ✅ | طُبِّق ثم أُعيد ثم rollback ثم أُعيد |
+| BLK-009/BLK-010 مغلقان | ✅ | قرار موثّق + فحص بيانات القديم |
+
 ## ما لا يزال مفتوحاً (ليس عائقاً حاجزاً)
 
 | البند | الحالة | ملاحظة |
 |-------|--------|--------|
 | BLK-006 | مفتوح | ملحق تصحيحي جاهز؛ ينتظر اطلاع الإدارة |
 | BLK-007 | مؤجل P2 | `user_log` غير منقول — لم يبدأ بقرار صريح |
-| BLK-009 | مفتوح | `regions` بلا `countryId` — يحتاج قراراً |
-| BLK-010 | مفتوح | لا عمود `code` في `facilities` — يحتاج قراراً |
+| GAP-M-004 | مؤجل (اختياري) | عرض تفاصيل وظيفة — لم يُنفَّذ في Sprint 4 |
+| إدارة المراجع الفرعية | متبقية | `salary_grades`/`cadres`/`classifications` — فجوات منفصلة |
 | PDF عربي | قيد معروف | CSV/JSON سليمان؛ PDF إنجليزي فقط — GAP-L-002 جزئية (P2) |
 | Excel export | غير منفّذ | GAP-L-002 جزئية (P2) |
 | scheduling (GAP-L-001) | مؤجل P3 | بقرار ADR-004 |

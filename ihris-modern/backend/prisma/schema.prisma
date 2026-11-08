@@ -264,6 +264,8 @@ model Country {
   id        Int      @id @default(autoincrement())
   name      String   @unique @db.VarChar(100)
   code      String?  @unique @db.VarChar(10)
+  // ADR-007: قفل تفاؤلي لتعديل الدولة
+  version   Int      @default(1)
   createdAt DateTime @default(now())
 
   districts District[]
@@ -271,6 +273,24 @@ model Country {
   people    Person[]
 
   @@map("countries")
+}
+
+// ADR-007: سجل تدقيق عمليات الدول (create/update/delete)
+// بلا FK إلى countries عمداً: الحذف فيزيائي ويجب أن يبقى السجل بعده.
+model CountryAuditLog {
+  id        Int      @id @default(autoincrement())
+  countryId Int
+  action    String   @db.VarChar(20)
+  changedBy Int
+  changedAt DateTime @default(now())
+  oldValues Json?
+  newValues Json?
+  reason    String?  @db.Text
+
+  @@index([countryId, changedAt(sort: Desc)])
+  @@index([action])
+  @@index([changedAt])
+  @@map("country_audit_log")
 }
 
 model District {

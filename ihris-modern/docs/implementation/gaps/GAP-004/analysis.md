@@ -43,3 +43,17 @@
 
 - البحث بالكود (لا عمود `code` — BLK-010).
 - cascade `country → region` (لا رابط — BLK-009).
+
+## 6. فحص BLK-010 — هل يوجد `code` في `hippo_facility`؟ (Sprint 4)
+
+| البند | النتيجة | المصدر |
+|-------|---------|--------|
+| أعمدة `hippo_facility` | `id`, `name`, `facility_type`, `district`, `county`, `country`, `region` — **لا يوجد عمود `code`** | `02-OLD-DATA-DICTIONARY.md` §3.4 (السطور 173–184) |
+| أعمدة `facilities` الحديثة | `id`, `name`, `facilityTypeId`, `districtId`, `countyId`, `countryId`, `regionId`, `version`, `createdAt`, `updatedAt` — لا `code` | Prisma schema + `information_schema.columns` |
+| أي إشارة إلى كود منشأة في القواعد | لا شيء (BR-047..051 تغطي العلاقات فقط) | `04-OLD-BUSINESS-RULES.md` |
+
+**القرار: لا تُضاف migration 006 لكود المنشأة.** لا دليل على العمود في القديم،
+وإضافته ستكون "اجتهاداً" بلا مصدر. **BLK-010 يُغلق** بحالة: `not in old system — deferred`.
+
+> الأثر: البحث في شاشة المنشآت يبقى بالاسم فقط (case-insensitive)؛ هذا مطابق
+> لبنية النظام القديم، وليس نقصاً في التنفيذ.

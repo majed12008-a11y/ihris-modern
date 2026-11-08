@@ -575,3 +575,67 @@
 - 10/10 سيناريوهات قبول + 8/8 أمان + 6/6 وحدة.
 - Regression: 108 backend + 3 frontend = 111/111.
 - الترحيل 005: idempotent + rollback مُختبَر.
+
+---
+
+## ADR-007: إدارة البيانات المرجعية (Countries + Jobs) — Sprint 4
+
+### 7.1 السياق
+
+الفجوات GAP-M-008/009/010 (الدول) وGAP-M-005/006/007 (المسميات الوظيفية) هي
+إدارة بيانات مرجعية: جداول صغيرة، نادرة التغيير، لكنها مرتبطة بكيانات أساسية
+(`people`, `facilities`, `districts`, `positions`). لا يوجد لها API مستقل ولا واجهة،
+والقراءة متاحة جزئياً فقط عبر مسارات المنشآت المرجعية.
+
+### 7.2 القرارات (10)
+
+| # | السؤال | القرار |
+|---|--------|--------|
+| 1 | Soft أم Hard delete؟ | **Hard** — نفس نهج `facilities` (بيانات نادرة التغيير، لا حاجة لاستعادة) |
+| 2 | حماية من الحذف | **عدّ المراجع في التطبيق أولاً → 422**، وFK كشبكة أمان ثانية |
+| 3 | Audit | **نعم** — `country_audit_log` و`job_audit_log` (بلا FK، ليبقى السجل بعد الحذف) |
+| 4 | Version field | **نعم** — `countries.version` و`jobs.version` + `updateMany({id,version})` → 409 |
+| 5 | Cascade UI | **نعم للوظائف**: `salaryGradeId` + `cadreId` + `classificationId` عبر `/api/jobs/meta/*` |
+| 6 | Pagination | **نعم** — 20/صفحة (سقف 100)، تماشياً مع `facilities` |
+| 7 | Search | **بالاسم + الكود** (case-insensitive)؛ الكود موجود في `countries` و`jobs` |
+| 8 | Zod `.strict()` | **نعم** — رفض أي حقل غير معروف (Mass assignment) |
+| 9 | الأدوار | `admin` + `hr_manager`: إنشاء/تعديل. `admin`: حذف. `hr_staff` وبقية الأدوار: قراءة |
+| 10 | إعادة الاستخدام | **نفس نمط `facility.service/validation/controller/routes`** (اتساق كامل) |
+
+### 7.3 تفاصيل الحماية من الحذف
+
+**الدولة (`countries`)** — تُعدّ المراجع في:
+`districts.countryId`, `facilities.countryId`, `people.countryId`,
+`people.nationalityId`, `people.residenceCountryId`, `scheduled_training_courses.countryId`.
+
+> السبب: `nationalityId` و`residenceCountryId` و`scheduled_training_courses.countryId` بلا FK،
+> لذا حذف الدولة كان سيترك قيماً معلّقة صامتة.
+
+**المسمى الوظيفي (`jobs`)** — تُعدّ `positions.jobId`؛ سلوك `SET NULL` في FK
+غير مقبول كسلوك افتراضي.
+
+كلا الحذفين يُرجع **422** مع عدّاد المراجع في `details`.
+
+### 7.4 التفرد (Uniqueness)
+
+- `countries.name` و`countries.code`: UNIQUE في DB + تحقق تطبيقي case-insensitive → **409**.
+- `jobs.title`: **ليس UNIQUE في DB** (مطابق للقديم) لكن يُفرض تفرّده تطبيقياً → **409**
+  (سيناريو القبول 9 يطلب ذلك). `jobs.code` لا يُفرض تفرّده (لا دليل في القديم).
+
+### 7.5 الترقيم
+
+- `006_country_version_and_audit.sql` — لأن 006 لم يُستخدم (BLK-010 أُغلق: لا `code` في المنشآت).
+- `007_job_version_and_audit.sql`.
+
+### 7.6 القيود المعروفة
+
+1. **GAP-M-004** (عرض تفاصيل وظيفة) لم يُنفَّذ — اختياري في أمر السبرنت.
+2. لا إدارة لـ`salary_grades`/`cadres`/`classifications` نفسها (فجوات مرجعية منفصلة).
+3. حذف الدولة محظور حتى لو كان المرجع الوحيد صفاً في `people.nationalityId` بلا FK — وهذا مقصود.
+4. لا Soft Delete → لا استعادة.
+
+### 7.7 بوابة Sprint 4
+
+- 12/12 سيناريو قبول + 8/8 أمان + 8/8 وحدة.
+- Regression: 108 + 28 = 136 backend + 3 frontend = **139/139**.
+- الترحيلان 006/007: idempotent + rollback.
