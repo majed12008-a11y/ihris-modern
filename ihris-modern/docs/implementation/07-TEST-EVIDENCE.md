@@ -16,7 +16,9 @@
 | Node | 25.9.0 |
 | Jest | 29.7.0 + ts-jest |
 | إعداد Jest | `forceExit: true`, `testTimeout: 30000`, `maxWorkers: 1` |
-| حارس قاعدة الاختبار | `jest.globalSetup.js` يرفض التشغيل إذا لم يحتوِ `DATABASE_URL` على `_test_` (حماية من `deleteMany` على قاعدة غير اختبارية) |
+| حارس قاعدة الاختبار | `jest.globalSetup.js`: 6 حواجز (NODE_ENV / وجود URL / `_test_` / منع `ihris_manage` / `ihris_test_user` / تحقق `current_database`) |
+| عزل المعاملات | `src/__tests__/setup.ts`: كل `it` داخل معاملة Prisma تُلغى (ROLLBACK) بعد الانتهاء |
+| Preflight | `scripts/test-preflight.js` + `npm test` من `ihris-modern/` (يتحقق أيضاً من فشل اتصال مستخدم الاختبار بالإنتاج) |
 
 ## 3. Backend — 191/191 ✅ (23 suites)
 

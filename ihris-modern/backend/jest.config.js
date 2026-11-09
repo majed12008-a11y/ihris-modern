@@ -10,6 +10,8 @@ module.exports = {
   testPathIgnorePatterns: ["/node_modules/"],
   // حارس أمان: يرفض التشغيل إذا لم يكن DATABASE_URL قاعدة اختبار صريحة.
   globalSetup: "<rootDir>/jest.globalSetup.js",
+  // Sprint 5.5: كل اختبار داخل معاملة تُلغى بعد الانتهاء.
+  setupFilesAfterEnv: ["<rootDir>/src/__tests__/setup.ts"],
   // Prisma/supertest يتركان handles مفتوحة، ما يمنع Jest من الخروج بعد انتهاء الاختبارات
   forceExit: true,
   testTimeout: 30000,

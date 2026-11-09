@@ -159,6 +159,26 @@ describe("Sprint 5 — CRUD للبيانات المرجعية (20 سيناريو
       let code: string;
       let name: string;
 
+      // Sprint 5.5: كل اختبار داخل معاملة مستقلة، لذا نُنشئ سجلاً خاصاً به.
+      async function createEntity() {
+        const createdName = uniqueName(entity);
+        const createdCode = `${PREFIX.toUpperCase()}-${Math.random()
+          .toString(36)
+          .slice(2, 6)
+          .toUpperCase()}`;
+        const res = await request(app)
+          .post(`/api/reference/${entity.slug}`)
+          .set("Authorization", `Bearer ${managerToken}`)
+          .send({
+            name: createdName,
+            code: createdCode,
+            description: "وصف اختباري",
+            ...entity.extra,
+          });
+        expect(res.status).toBe(201);
+        return { id: res.body.id as number, name: createdName, code: createdCode };
+      }
+
       it(`ينشئ ${entity.label} بإصدار 1 — 201`, async () => {
         name = uniqueName(entity);
         code = `${PREFIX.toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
@@ -177,42 +197,45 @@ describe("Sprint 5 — CRUD للبيانات المرجعية (20 سيناريو
       });
 
       it(`يقرأ ${entity.label} في القائمة وبالمعرّف — 200`, async () => {
+        const created = await createEntity();
         const list = await request(app)
-          .get(`/api/reference/${entity.slug}?search=${encodeURIComponent(name)}`)
+          .get(`/api/reference/${entity.slug}?search=${encodeURIComponent(created.name)}`)
           .set("Authorization", `Bearer ${staffToken}`);
         expect(list.status).toBe(200);
         expect(list.body.total).toBe(1);
-        expect(list.body.data[0].id).toBe(id);
+        expect(list.body.data[0].id).toBe(created.id);
 
         const byId = await request(app)
-          .get(`/api/reference/${entity.slug}/${id}`)
+          .get(`/api/reference/${entity.slug}/${created.id}`)
           .set("Authorization", `Bearer ${staffToken}`);
         expect(byId.status).toBe(200);
-        expect(byId.body.code).toBe(code);
+        expect(byId.body.code).toBe(created.code);
       });
 
       it(`يعدّل ${entity.label} ويرفع الإصدار إلى 2 — 200`, async () => {
-        const newName = `${name}-معدل`;
+        const created = await createEntity();
+        const newName = `${created.name}-معدل`;
         const res = await request(app)
-          .put(`/api/reference/${entity.slug}/${id}`)
+          .put(`/api/reference/${entity.slug}/${created.id}`)
           .set("Authorization", `Bearer ${managerToken}`)
           .send({ name: newName, version: 1 });
 
         expect(res.status).toBe(200);
         expect(res.body.name).toBe(newName);
         expect(res.body.version).toBe(2);
-        expect(res.body.code).toBe(code);
+        expect(res.body.code).toBe(created.code);
       });
 
       it(`يحذف ${entity.label} حذفاً فيزيائياً — 200 ثم 404`, async () => {
+        const created = await createEntity();
         const del = await request(app)
-          .delete(`/api/reference/${entity.slug}/${id}`)
+          .delete(`/api/reference/${entity.slug}/${created.id}`)
           .set("Authorization", `Bearer ${adminToken}`);
         expect(del.status).toBe(200);
         expect(del.body.success).toBe(true);
 
         const after = await request(app)
-          .get(`/api/reference/${entity.slug}/${id}`)
+          .get(`/api/reference/${entity.slug}/${created.id}`)
           .set("Authorization", `Bearer ${staffToken}`);
         expect(after.status).toBe(404);
       });

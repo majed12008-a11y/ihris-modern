@@ -1,5 +1,20 @@
+import path from "path";
 import dotenv from "dotenv";
 
+/**
+ * Sprint 5.5: فصل البيئات.
+ * test → .env.test، production → .env.production، غير ذلك → .env.local
+ * المتغيرات المضبوطة في الصدفة تبقى لها الأولوية (dotenv لا يستبدلها).
+ */
+const envFile =
+  process.env.NODE_ENV === "test"
+    ? ".env.test"
+    : process.env.NODE_ENV === "production"
+      ? ".env.production"
+      : ".env.local";
+
+dotenv.config({ path: path.resolve(process.cwd(), envFile) });
+// توافق احتياطي مع أي تثبيت قديم يعتمد على .env
 dotenv.config();
 
 export const config = {

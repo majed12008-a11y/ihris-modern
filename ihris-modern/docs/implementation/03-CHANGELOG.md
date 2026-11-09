@@ -1,5 +1,25 @@
 # سجل التغييرات (Changelog)
 
+## [0.8.0] - 09 نوفمبر 2026 — Sprint 5.5 (تحصين أمني)
+
+### أُضيف
+- **فصل البيئات**: `.env.local` (تطوير) + `.env.test` (اختبار) + `.env.production.example` (نموذج)، و`.gitignore` يمنع تسريبها.
+- **مستخدم اختبار معزول**: `ihris_test_user` بصلاحيات محدودة على `ihris_test_gap001` فقط، مع سحب `CONNECT` من PUBLIC على `ihris_manage`.
+- **6 حواجز اختبار**: `jest.globalSetup.js` (NODE_ENV، وجود URL، `_test_`، منع `ihris_manage`، `ihris_test_user`، تحقق `current_database`).
+- **Preflight**: `scripts/test-preflight.js` + `scripts/test-preflight.sh` + سكربتات `npm test` في `ihris-modern/package.json`.
+- **Transaction wrapper**: كل اختبار داخل معاملة Prisma تُلغى تلقائياً (`src/__tests__/setup.ts` + Proxy في `src/lib/prisma.ts`).
+- **اختبار الحارس**: 3/3 يغطي الحواجز 1..6 منفردة + مسار النجاح.
+
+### تغييرات
+- `src/config/index.ts` يحمّل ملف البيئة حسب `NODE_ENV`.
+- `person.test.ts` و`reference.test.ts` أُعيد ضبطهما ليعمل كل اختبار باستقلالية داخل معاملته.
+- `.env.example` نُظّف من أي بيانات اعتماد حقيقية.
+
+### الأرقام
+- Backend: **194/194** (24 suites، منها 3 اختبارات حارس).
+- Frontend: **3/3**.
+- الإجمالي: **197/197**.
+
 ## [0.7.0] - 08 نوفمبر 2026 — Sprint 5 (البيانات المرجعية + Seed واقعي)
 
 ### أُضيف

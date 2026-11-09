@@ -46,6 +46,12 @@ beforeAll(async () => {
     password: "admin123",
   });
   authToken = loginRes.body.token;
+
+  // Sprint 5.5: بيانات أساسية خارج معاملة الاختبار حتى يراها كل اختبار.
+  await prisma.person.deleteMany({ where: { surname: "الأحمدي" } });
+  await prisma.person.create({
+    data: { surname: "الأحمدي", firstname: "محمد", othername: "علي", countryId: 1 },
+  });
 });
 
 afterAll(async () => {

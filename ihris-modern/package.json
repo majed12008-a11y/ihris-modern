@@ -1,0 +1,12 @@
+{
+  "name": "ihris-modern",
+  "version": "1.0.0",
+  "private": true,
+  "description": "iHRIS Suite Modern — workspace-level scripts",
+  "scripts": {
+    "test": "node scripts/test-preflight.js && node scripts/run-backend-tests.js",
+    "test:preflight": "node scripts/test-preflight.js",
+    "test:backend": "node scripts/test-preflight.js && node scripts/run-backend-tests.js",
+    "test:frontend": "npm --prefix frontend test -- --run"
+  }
+}
