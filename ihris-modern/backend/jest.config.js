@@ -8,6 +8,8 @@ module.exports = {
     "^.+\\.ts$": ["ts-jest", { tsconfig: "<rootDir>/tsconfig.json" }],
   },
   testPathIgnorePatterns: ["/node_modules/"],
+  // حارس أمان: يرفض التشغيل إذا لم يكن DATABASE_URL قاعدة اختبار صريحة.
+  globalSetup: "<rootDir>/jest.globalSetup.js",
   // Prisma/supertest يتركان handles مفتوحة، ما يمنع Jest من الخروج بعد انتهاء الاختبارات
   forceExit: true,
   testTimeout: 30000,

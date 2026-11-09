@@ -16,6 +16,7 @@
 | Node | 25.9.0 |
 | Jest | 29.7.0 + ts-jest |
 | إعداد Jest | `forceExit: true`, `testTimeout: 30000`, `maxWorkers: 1` |
+| حارس قاعدة الاختبار | `jest.globalSetup.js` يرفض التشغيل إذا لم يحتوِ `DATABASE_URL` على `_test_` (حماية من `deleteMany` على قاعدة غير اختبارية) |
 
 ## 3. Backend — 191/191 ✅ (23 suites)
 

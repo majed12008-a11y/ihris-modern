@@ -21,6 +21,7 @@
 - `ReferenceDataManager.tsx` + 5 صفحات رقيقة + routes + 5 عناصر تنقّل.
 - `GET /api/jobs/:id` يعيد `positions` (GAP-M-004).
 - `migrations/seeds/README.md` — توثيق 26 صفاً بالسطر والمصدر ومستوى الثقة.
+- `jest.globalSetup.js` — حارس يرفض تشغيل الاختبارات إذا لم يكن `DATABASE_URL` قاعدة اختبار صريحة (`_test_`).
 
 ### مُغلق
 - **BLK-011**: ✅ الجداول المرجعية الفارغة لم تعد تعطّل `Jobs.tsx`.
