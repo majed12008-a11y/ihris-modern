@@ -1,13 +1,13 @@
 # العوائق (Blockers)
 
-> آخر تحديث: 08 نوفمبر 2026 — بعد Sprint 4 (إغلاق BLK-009 + BLK-010، GAP-M-005/006/007/008/009/010).
+> آخر تحديث: 08 نوفمبر 2026 — بعد Sprint 5 (إغلاق BLK-011، GAP-FE-010/011/012 + GAP-M-004/012/013/014/015).
 
 ## العوائق الحالية
 
 | معرف | العنوان | الوصف | التأثير | الأولوية | الحل المقترح | الحالة |
 |-------|---------|-------|---------|---------|-------------|---------|
 | — | (لا يوجد عائق حاجز) | جميع عوائق Sprint 1.5 وSprint 2 أُغلقت، وSprint 2.5 وSprint 3 وSprint 4 أُغلقت بلا عوائق حاجزة | — | — | — | — |
-| BLK-006 | عيوب جودة بيانات في تقارير الدراسة | التقارير الأصلية تحتوي: 22 مقابل 31 مقابل 44 فجوة، نسب تجمع 141%، 13 فجوة غير محسوبة، تناقض `GAP-007`/`GAP-FE-007`، وتصنيف خطورة غير متسق | لا يُغلق تلقائياً؛ أُضيف له ملحق تصحيحي ولا يوقف العمل | متوسطة | `docs/implementation/CORRECTED-GAP-REGISTRY.md` (العدد الكانوني 44) + إبلاغ الإدارة | مفتوح (مُعالَج بملحق) |
+| BLK-006 | عيوب جودة بيانات في تقارير الدراسة | التقارير الأصلية تحتوي: 22 مقابل 31 مقابل 44 فجوة، نسب تجمع 141%، 13 فجوة غير محسوبة، تناقض `GAP-007`/`GAP-FE-007`، وتصنيف خطورة غير متسق. **البند السابع (Sprint 5): لم يُختبر سيناريو end-to-end كامل** — عُولج جزئياً باختبار Seed→Job→Position. | لا يُغلق تلقائياً؛ أُضيف له ملحق تصحيحي ولا يوقف العمل | متوسطة | `docs/implementation/CORRECTED-GAP-REGISTRY.md` (العدد الكانوني الآن 48) + إبلاغ الإدارة | مفتوح (مُعالَج بملحق) |
 | BLK-007 | `user_log` مفقود في النظام الحديث | جدول `user_log` القديم (login/logout/session_id/activity) لا يوجد له مثيل في `ihris_test_gap001` ولا في Prisma. | لا توجد مراقبة لنشاط الدخول/الخروج؛ مرتبط بـ`RISK-013` | P2 (مؤجل بقرار) | فجوة منفصلة (مرشّحة `GAP-L-005`)؛ **مؤجلة إلى P2 — لم تبدأ** | مفتوح (مؤجل P2) |
 
 
@@ -23,6 +23,7 @@
 | **BLK-008** | ✅ **مغلق** | **2026-11-06** | **Sprint 2.5:** `users.isActive` (migration 003) + `PUT /api/users/:id/deactivate` و`/activate` (admin) + رفض دخول المعطّل (401) + badge/تبويب في `Users.tsx` + audit `deactivate`/`activate` + ورموز JWT مبطلة (ADR-005). الدليل: `user.lifecycle.test.ts` 6/6 لآلية التعطيل. |
 | **BLK-009** | ✅ **مغلق** | **2026-11-08** | **BLK-009 CLOSED — Decision: Keep regions independent.** Rationale: النظام القديم (BR-049) يعامل `region` كبُعد منفصل، ولا `countryId` في `regions`. Cascade ثلاثي `country → district → county` + `region` مستقل. **Revisit: P3** إذا أبلغ المستخدمون عن مشكلة في التسلسل الجغرافي. موثّق في ADR-007 §7.3. |
 | **BLK-010** | ✅ **مغلق** | **2026-11-08** | **فحص موثّق:** `hippo_facility` (§3.4 من `02-OLD-DATA-DICTIONARY.md`) = `id, name, facility_type, district, county, country, region` — **لا يوجد `code`**. لا إشارة لكود منشأة في BR-047..051. القرار: **not in old system — deferred**، ولا migration 006. البحث بالاسم فقط (مطابق للقديم). |
+| **BLK-011** | ✅ **مغلق** | **2026-11-08** | **Sprint 5:** الجداول المرجعية كانت فارغة وتعطّل `Jobs.tsx`. أُنشئت CRUD كاملة للخمسة (`/api/reference/*` + `ReferenceDataManager.tsx` + 5 صفحات)، وطُبّق Seed فعلي من `DB export.sql` (26 صفاً FACT: 5 درجات + 4 فئات + 6 تصنيفات + 4 أنواع + 7 مصادر) مع migration 010 منفصل وrollback. اختبار E2E: إنشاء job بمراجع seeded → 201، وحذف مرجع مستخدم → 422. الدليل: `reference.test.ts` 21–22 + `reference.security.test.ts` + `reference.extra.test.ts`. |
 
 ## العوائق المحتملة (لم تحدث بعد)
 
@@ -72,14 +73,29 @@
 | migrations 006/007 idempotent + rollback | ✅ | طُبِّق ثم أُعيد ثم rollback ثم أُعيد |
 | BLK-009/BLK-010 مغلقان | ✅ | قرار موثّق + فحص بيانات القديم |
 
+## بوابة Sprint 5 — النتيجة
+
+| البند | الحالة | الدليل |
+|-------|--------|--------|
+| BLK-011 مغلق (جداول مرجعية مستخدمة) | ✅ | Seed 26 صفاً + CRUD + E2E |
+| GAP-FE-010/011/012 (درجات الرواتب) | ✅ | `salary-grades` + `SalaryGrades.tsx` |
+| GAP-M-012/013/014/015 | ✅ | 4 مسارات CRUD + 4 صفحات |
+| GAP-M-004 (عرض تفاصيل وظيفة) | ✅ | `JobDetail.tsx` + `GET /api/jobs/:id` |
+| 22/22 سيناريو قبول + 10/10 أمان | ✅ | `reference.test.ts` + `reference.security.test.ts` |
+| 11/11 تكميلي + 12/12 وحدة | ✅ | `reference.extra.test.ts` + `reference.validation.test.ts` |
+| Regression 139 + 55 = 194/194 | ✅ | backend 191/191 + frontend 3/3 |
+| `ihris_manage` لم تُمسّ | ✅ | الـseed على `ihris_test_gap001` فقط |
+| migrations 008/009/010 idempotent + rollback | ✅ | طُبِّق ثم أُعيد ثم rollback ثم أُعيد |
+| Seed كل صف موثّق بمصدره | ✅ | `migrations/seeds/README.md` |
+
 ## ما لا يزال مفتوحاً (ليس عائقاً حاجزاً)
 
 | البند | الحالة | ملاحظة |
 |-------|--------|--------|
 | BLK-006 | مفتوح | ملحق تصحيحي جاهز؛ ينتظر اطلاع الإدارة |
 | BLK-007 | مؤجل P2 | `user_log` غير منقول — لم يبدأ بقرار صريح |
-| GAP-M-004 | مؤجل (اختياري) | عرض تفاصيل وظيفة — لم يُنفَّذ في Sprint 4 |
-| إدارة المراجع الفرعية | متبقية | `salary_grades`/`cadres`/`classifications` — فجوات منفصلة |
+| إدارة المراجع الفرعية | ✅ مغلق في Sprint 5 | `salary_grades`/`cadres`/`classifications`/`position_types`/`salary_sources` |
+| `positions.source` كنص حر | متابعة | لم يُحوَّل إلى FK على `salary_sources` — ADR-008 §8.5 |
 | PDF عربي | قيد معروف | CSV/JSON سليمان؛ PDF إنجليزي فقط — GAP-L-002 جزئية (P2) |
 | Excel export | غير منفّذ | GAP-L-002 جزئية (P2) |
 | scheduling (GAP-L-001) | مؤجل P3 | بقرار ADR-004 |

@@ -233,4 +233,37 @@ GAP-M-008/009/010 وGAP-M-005/006/007 **مغلقة**. التقدم **13/44 = 29.
 BLK-009 وBLK-010 **مغلقان**. GAP-M-004 (اختيارية) مؤجلة. Migration 006 حلّ محل
 مقترح «006 لكود المنشأة» بعد إغلاق BLK-010 بالدليل.
 
+## Sprint 5 — 08 نوفمبر 2026 (البيانات المرجعية + Seed واقعي)
+
+| الوقت | المهمة | الناتج | الحالة |
+|-------|--------|--------|--------|
+| 09:00 | استخراج البيانات الفعلية من `DB export.sql` | 26 صفاً من `ihris_manage` (5+4+6+4+7) | ✅ |
+| 09:20 | تحليل GAP-M-012..015 | `gaps/GAP-M-012/analysis.md` | ✅ |
+| 09:40 | ADR-008 (10 قرارات) | `04-DECISIONS.md` §8 | ✅ |
+| 10:00 | ترحيل 008 (schema) + rollback | تطبيق → إعادة → rollback → إعادة | ✅ |
+| 10:20 | ترحيل 009 (audit) + rollback | جدول موحّد + CHECK + 3 فهارس | ✅ |
+| 10:40 | ترحيل 010 (seed) + rollback | 26 صفاً → `INSERT 0 0` عند الإعادة | ✅ |
+| 11:00 | Prisma schema + validate/generate | 5 نماذج + `ReferenceDataAuditLog` | ✅ |
+| 11:20 | `referenceData.validation.ts` | 10 مخططات strict + 12 اختبار وحدة | ✅ |
+| 11:50 | `referenceData.service.ts` | CRUD عام + audit + 409 + 422 + version | ✅ |
+| 12:30 | `reference.controller.ts` + `routes/reference.ts` + `app.ts` | 10 نقاط نهاية (5 × GET/POST/PUT/DELETE) | ✅ |
+| 13:00 | `ReferenceDataManager.tsx` + 5 صفحات | إعدادات تعريفية + modals + pagination | ✅ |
+| 13:40 | `JobDetail.tsx` + `positions` في `GET /api/jobs/:id` | GAP-M-004 | ✅ |
+| 14:10 | `App.tsx` + `MainLayout.tsx` | 6 routes + 5 عناصر تنقّل | ✅ |
+| 14:30 | `tsc --noEmit` | backend ✅ / frontend ✅ | ✅ |
+| 14:50 | `reference.test.ts` | 20 CRUD + 2 E2E = 22/22 | ✅ |
+| 15:20 | `reference.security.test.ts` | 10/10 أمان | ✅ |
+| 15:40 | `reference.extra.test.ts` | 11/11 تكميلي (409/404/422/audit) | ✅ |
+| 16:00 | `reference.validation.test.ts` | 12/12 وحدة | ✅ |
+| 16:20 | Regression كامل | 191 backend + 3 frontend = 194/194 | ✅ |
+| 16:40 | rollback 010/009/008 ثم إعادة التطبيق | 26→0→26 صفاً | ✅ |
+| 17:00 | فحص `ihris_manage` | 0 أعمدة/جداول جديدة | ✅ |
+| 17:20 | إغلاق الوثائق | DASHBOARD 21/48 + REGISTRY + BLOCKERS + seeds/README | ✅ |
+
+### الخلاصة
+
+GAP-FE-010/011/012 + GAP-M-004/012/013/014/015 **مغلقة**. التقدم **21/48 = 43.75%**.
+BLK-011 **مغلق** (26 صفاً مرجعياً + CRUD + E2E). BLK-006 بنده السابع مُحدَّث.
+Seed موثّق صفاً بصف بمستويات FACT/DERIVED (ESTIMATE = 0).
+
 

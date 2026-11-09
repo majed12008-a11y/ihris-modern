@@ -1,6 +1,6 @@
-# أدلة الاختبار — GAP-001 + GAP-002/003 + Sprint 2.5 + GAP-004/005/006 + Sprint 4
+# أدلة الاختبار — GAP-001 + GAP-002/003 + Sprint 2.5 + GAP-004/005/006 + Sprint 4 + Sprint 5
 
-> آخر تحديث: 08 نوفمبر 2026 — Sprint 1.5b/1.5c + Sprint 2 + Sprint 2.5 + Sprint 3 + Sprint 4.
+> آخر تحديث: 08 نوفمبر 2026 — Sprint 1.5b/1.5c + Sprint 2 + Sprint 2.5 + Sprint 3 + Sprint 4 + Sprint 5.
 > كل رقم أدناه مأخوذ من تشغيل فعلي، لا من تقدير.
 
 ## 1. تصحيح تاريخي
@@ -17,7 +17,7 @@
 | Jest | 29.7.0 + ts-jest |
 | إعداد Jest | `forceExit: true`, `testTimeout: 30000`, `maxWorkers: 1` |
 
-## 3. Backend — 136/136 ✅ (19 suites)
+## 3. Backend — 191/191 ✅ (23 suites)
 
 الأمر:
 
@@ -26,7 +26,7 @@ DATABASE_URL=postgresql://ihris:***@localhost:5432/ihris_test_gap001 \
 npx jest --runInBand
 ```
 
-المخرج الفعلي (بعد Sprint 4):
+المخرج الفعلي (بعد Sprint 5):
 
 ```text
 PASS src/__tests__/job.test.ts
@@ -48,9 +48,13 @@ PASS src/__tests__/report.engine.test.ts
 PASS src/__tests__/user.validation.test.ts
 PASS src/__tests__/report.validation.test.ts
 PASS src/__tests__/facility.validation.test.ts
+PASS src/__tests__/reference.test.ts
+PASS src/__tests__/reference.security.test.ts
+PASS src/__tests__/reference.extra.test.ts
+PASS src/__tests__/reference.validation.test.ts
 
-Test Suites: 19 passed, 19 total
-Tests:       136 passed, 136 total
+Test Suites: 23 passed, 23 total
+Tests:       191 passed, 191 total
 ```
 
 ### 3.1 محرك التقارير — 12/12
@@ -280,14 +284,14 @@ country/job audit| 0 جداول
 
 | الفئة | العدد | ناجح | فاشل |
 |-------|-------|-------|------|
-| Backend (Sprint 1.5 + 2 + 2.5 + 3 + 4) | 136 | 136 | 0 |
+| Backend (Sprint 1.5 + 2 + 2.5 + 3 + 4 + 5) | 191 | 191 | 0 |
 | Frontend | 3 | 3 | 0 |
-| **الإجمالي** | **139** | **139** | **0** |
+| **الإجمالي** | **194** | **194** | **0** |
 | TypeScript | 2 مشروع | 2 | 0 |
-| ترحيلات 003–007 (idempotency/rollback) | 20 خطوة | 20 | 0 |
+| ترحيلات 003–010 (idempotency/rollback) | 29 خطوة | 29 | 0 |
 
-> Regression: 136 backend + 3 frontend = **139/139**. Sprint 4 أضاف 28 اختباراً
-> (12 قبول + 8 أمان + 8 وحدة) على 111 سابقة.
+> Regression: 191 backend + 3 frontend = **194/194**. Sprint 5 أضاف 55 اختباراً
+> (22 قبول/E2E + 10 أمان + 11 تكميلي + 12 وحدة) على 139 سابقة.
 
 ## 11. قيود الاختبار
 
@@ -297,7 +301,7 @@ country/job audit| 0 جداول
 | Rate limit في الذاكرة | لا يُختبر عبر عمليات متعددة |
 | PDF لا يشكّل العربية | يُتحقق من صلاحية الملف (`%PDF-`) لا من صحة العرض البصري |
 | GAP-L-002 | لم يُختبر Arabic PDF أو Excel لأنهما غير منفّذين |
-| GAP-M-004 | غير منفّذة — لا اختبارات لها |
+| GAP-M-004 | ✅ منفّذة في Sprint 5 — مغطاة في E2E مع `JobDetail` |
 
 ## 12. Sprint 4 — تفصيل الاختبارات الجديدة (28/28)
 
@@ -309,3 +313,51 @@ country/job audit| 0 جداول
 | `job.security.test.ts` | 4 | mass assignment، version خاطئ 409، 403 حذف، حقن SQL |
 | `country.validation.test.ts` | 4 | Zod `.strict()` + `version` إلزامي |
 | `job.validation.test.ts` | 4 | Zod `.strict()` + cascade nullable + `version` إلزامي |
+
+## 13. Sprint 5 — ملخص التشغيل الفعلي (55/55)
+
+```text
+PASS src/__tests__/reference.test.ts
+PASS src/__tests__/reference.security.test.ts
+PASS src/__tests__/reference.extra.test.ts
+PASS src/__tests__/reference.validation.test.ts
+
+Test Suites: 23 passed, 23 total
+Tests:       191 passed, 191 total
+```
+
+## 14. Sprint 5 — تفصيل الاختبارات الجديدة (55)
+
+| الملف | العدد | التغطية |
+|-------|-------|---------|
+| `reference.test.ts` | 22 | 20 CRUD (5 كيانات × create/read/update/delete) + E2E: job بمراجع seeded → 201 + حذف مرجع مستخدم → 422 |
+| `reference.security.test.ts` | 10 | mass assignment (5 جداول)، IDOR، SQL injection، version 409، 401، رفع ملف، XSS، حذف مرتبط 422، قراءة hr_staff، تعديل hr_staff 403 |
+| `reference.extra.test.ts` | 11 | اسم/كود مكرر 409، بحث بالكود، pagination، مسار مجهول 404، حذف hr_manager 403، تعديل غير موجود 404، طول الاسم 400، حذف نوع مرتبط بمنصب 422، audit create/update/delete، code المحذوف null |
+| `reference.validation.test.ts` | 12 | Zod `.strict()`، name/version، حدود الطول، nullable، id موجب |
+
+## 15. Sprint 5 — التحقق من seed والترحيلات
+
+```text
+-- بعد تطبيق 008/009/010:
+ sg | ca | cl | pt | ss | audit
+----+----+----+----+----+-------
+  5 |  4 |  6 |  4 |  7 | 1
+
+-- إعادة تطبيق 010:
+INSERT 0 0  (×5 جداول)
+
+-- rollback 010/009/008:
+ sg | ca | cl | pt | ss | audit
+----+----+----+----+----+-------
+  0 |  0 |  0 |  0 |  0 | 0
+
+-- إعادة تطبيق نهائية: 26 صفاً + جدول التدقيق
+```
+
+## 16. Sprint 5 — قيود إضافية
+
+| القيد | الأثر |
+|-------|-------|
+| `salary_grades.start/end/midpoint` | كلها `NULL` — لم يُختبر أي مسار مالي (غير موجود) |
+| `positions.source` | نص حر — لا FK على `salary_sources` (خارج النطاق) |
+| Seed في الإنتاج | لم يُطبَّق؛ اختبارات الـseed على `ihris_test_gap001` فقط |

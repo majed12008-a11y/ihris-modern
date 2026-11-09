@@ -61,6 +61,22 @@
 | EVID-229 | قائمة المنشآت | كود الواجهة | `frontend/src/pages/Facilities.tsx` | FACT | بحث + ترقيم + إجراءات + modal حذف | مؤكدة |
 | EVID-230 | تفاصيل المنشأة | كود الواجهة | `frontend/src/pages/FacilityDetail.tsx` | FACT | كل الحقول + الوظائف المرتبطة | مؤكدة |
 | EVID-231 | نموذج المنشأة | كود الواجهة | `frontend/src/pages/FacilityForm.tsx` | FACT | cascade API-driven + prefill + version | مؤكدة |
+| EVID-232 | ترحيل 008 (مخطط مرجعي) | ملف SQL | `migrations/pending/008_reference_data_schema.sql` | FACT | توسيع 4 جداول + `salary_sources` + `version` + فهارس | مؤكدة |
+| EVID-233 | ترحيل 009 (تدقيق موحّد) | ملف SQL | `migrations/pending/009_reference_data_audit.sql` | FACT | `reference_data_audit_log` + CHECK + 3 فهارس | مؤكدة |
+| EVID-234 | ترحيل 010 (Seed) | ملف SQL | `migrations/pending/010_seed_reference_data.sql` | FACT | 26 صفاً FACT + `ON CONFLICT (code) DO NOTHING` | مؤكدة |
+| EVID-235 | Rollbacks 008/009/010 | ملفات SQL | `migrations/rollback/008..010_*_rollback.sql` | FACT | مُختبَرة: rollback ثم إعادة تطبيق | مؤكدة |
+| EVID-236 | خدمة البيانات المرجعية | كود الخلفية | `backend/src/services/referenceData.service.ts` | FACT | CRUD عام + audit + 409 + 422 + version | مؤكدة |
+| EVID-237 | تحقق البيانات المرجعية | كود الخلفية | `backend/src/services/referenceData.validation.ts` | FACT | 10 مخططات `.strict()` + رسائل عربية | مؤكدة |
+| EVID-238 | متحكم ومسارات المرجعية | كود الخلفية | `backend/src/controllers/reference.controller.ts` + `routes/reference.ts` | FACT | 5 كيانات × GET/POST/PUT/DELETE + RBAC | مؤكدة |
+| EVID-239 | مكوّن الإدارة المرجعية | كود الواجهة | `frontend/src/components/reference/ReferenceDataManager.tsx` | FACT | CRUD عام + بحث + ترقيم + modals | مؤكدة |
+| EVID-240 | صفحة درجات الرواتب | كود الواجهة | `frontend/src/pages/SalaryGrades.tsx` | FACT | GAP-FE-010/011/012 | مؤكدة |
+| EVID-241 | صفحة الفئات | كود الواجهة | `frontend/src/pages/Cadres.tsx` | FACT | GAP-M-012 | مؤكدة |
+| EVID-242 | صفحة التصنيفات | كود الواجهة | `frontend/src/pages/Classifications.tsx` | FACT | GAP-M-013 | مؤكدة |
+| EVID-243 | صفحة أنواع الوظائف | كود الواجهة | `frontend/src/pages/PositionTypes.tsx` | FACT | GAP-M-014 | مؤكدة |
+| EVID-244 | صفحة مصادر الرواتب | كود الواجهة | `frontend/src/pages/SalarySources.tsx` | FACT | GAP-M-015 | مؤكدة |
+| EVID-245 | صفحة تفاصيل المسمى | كود الواجهة | `frontend/src/pages/JobDetail.tsx` | FACT | GAP-M-004 + مناصب مرتبطة | مؤكدة |
+| EVID-246 | توثيق الـSeed | وثيقة | `migrations/seeds/README.md` | FACT | 26 صفاً بالسطر/المصدر/FACT-DERIVED | مؤكدة |
+| EVID-247 | ADR-008 | وثيقة | `docs/implementation/04-DECISIONS.md` §8 | FACT | 10 قرارات قبل التنفيذ | مؤكدة |
 
 ---
 
@@ -108,6 +124,17 @@
 | EVID-T-038 | Regression نهائي (Sprint 4) | backend + frontend | FACT | 136/136 + 3/3 = 139/139 | مؤكدة |
 | EVID-T-039 | ترحيلات 006/007 | psql على `ihris_test_gap001` | FACT | apply/reapply/rollback/reapply + إعادة الأعمدة | مؤكدة |
 | EVID-T-040 | `ihris_manage` بعد Sprint 4 | psql على `ihris_manage` | FACT | 0 أعمدة (`country/job version`) و0 جداول تدقيق | مؤكدة |
+| EVID-T-041 | قبول CRUD المرجعية (20) | `reference.test.ts` | FACT | 5 كيانات × create/read/update/delete = 20/20 | مؤكدة |
+| EVID-T-042 | E2E: Seed → Job (21) | `reference.test.ts` | FACT | job بمراجع seeded → 201 | مؤكدة |
+| EVID-T-043 | حذف مرجع مستخدم (22) | `reference.test.ts` | FACT | DELETE → 422 + `details` | مؤكدة |
+| EVID-T-044 | أمان المرجعية (10) | `reference.security.test.ts` | FACT | mass assignment/IDOR/SQLi/409/401/ملف/XSS/422/قراءة/403 | مؤكدة |
+| EVID-T-045 | تكميلي المرجعية (11) | `reference.extra.test.ts` | FACT | 409/بحث/ترقيم/404/403/طول/422/audit/null | مؤكدة |
+| EVID-T-046 | وحدة Zod للمرجعية (12) | `reference.validation.test.ts` | FACT | `.strict()` + version + حدود + nullable | مؤكدة |
+| EVID-T-047 | Regression نهائي (Sprint 5) | backend + frontend | FACT | 191/191 + 3/3 = 194/194 | مؤكدة |
+| EVID-T-048 | ترحيلات 008/009/010 | psql على `ihris_test_gap001` | FACT | apply/reapply/rollback/reapply | مؤكدة |
+| EVID-T-049 | Seed idempotent | psql على `ihris_test_gap001` | FACT | 26 صفاً؛ الإعادة `INSERT 0 0` | مؤكدة |
+| EVID-T-050 | `ihris_manage` بعد Sprint 5 | psql على `ihris_manage` | FACT | 0 أعمدة/جداول جديدة | مؤكدة |
+| EVID-T-051 | تفاصيل الوظيفة تعيد المناصب | `GET /api/jobs/:id` | FACT | `positions[]` + `posType`/`status`/`facility` | مؤكدة |
 
 ---
 
@@ -115,15 +142,17 @@
 
 | النوع | العدد | النسبة المئوية |
 |------|-------|-------------|
-| FACT (حقيقة مثبتة) | 79 | 100% |
+| FACT (حقيقة مثبتة) | 116 | 100% |
 | INFERENCE (استنتاج) | 0 | 0% |
 | ASSUMPTION (افتراض) | 0 | 0% |
 | UNKNOWN (غير معروفة) | 0 | 0% |
-| **الإجمالي** | **79 دليل** | **100%** |
+| **الإجمالي** | **116 دليل** | **100%** |
 
 > تصحيح Sprint 1.5b/1.5c: لم يبقَ أي دليل اختبار UNKNOWN أو INFERENCE؛ كلها نُفِّذت فعلياً.
 > Sprint 2.5 وSprint 3 أضافا 17 دليلاً جديداً (EVID-215..231 + EVID-T-023..032).
 > Sprint 4 أضاف 8 أدلة (EVID-T-033..040).
+> Sprint 5 أضاف 27 دليلاً (EVID-232..247 + EVID-T-041..051).
+> تصحيح عدّ: 49 دليلاً في §2 + 40 في §3 قبل Sprint 5 = 89 (كان الملخص يذكر 79 خطأً).
 
 ---
 
@@ -136,8 +165,9 @@
 | عدد الأدلة لـ Sprint 2.5 (BLK-008 + ADR-005) | 9 أدلة |
 | عدد الأدلة لـ GAP-004/005/006 | 8 أدلة |
 | عدد الأدلة لـ GAP-M-005..010 (Sprint 4) | 8 أدلة |
-| عدد الأدلة من النوع FACT | 79 دليل |
+| عدد الأدلة لـ Sprint 5 (المرجعية + Seed + JobDetail) | 27 دليلاً |
+| عدد الأدلة من النوع FACT | 116 دليل |
 | نسبة الأدلة المؤكدة | 100% |
 | قاعدة الاختبار | `ihris_test_gap001` |
 | سجل الترحيل | `migrations/applied/README.md` |
-| التقدم | 13/44 = 29.5% |
+| التقدم | 21/48 = 43.75% |

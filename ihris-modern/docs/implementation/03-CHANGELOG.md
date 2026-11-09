@@ -1,5 +1,41 @@
 # سجل التغييرات (Changelog)
 
+## [0.7.0] - 08 نوفمبر 2026 — Sprint 5 (البيانات المرجعية + Seed واقعي)
+
+### أُضيف
+- **GAP-FE-010/011/012**: ✅ CRUD درجات الرواتب (backend + UI + audit + 409/422).
+- **GAP-M-012**: ✅ Cadre CRUD.
+- **GAP-M-013**: ✅ Classification CRUD.
+- **GAP-M-014**: ✅ Position Type CRUD.
+- **GAP-M-015**: ✅ Salary Source CRUD (جدول جديد).
+- **GAP-M-004**: ✅ صفحة تفاصيل المسمى الوظيفي + المناصب المرتبطة.
+- **Seed Data**: ✅ 26 صفاً واقعياً من `DB export.sql` (FACT) + أكواد مشتقة (DERIVED).
+
+### تغييرات
+- ترحيل `008_reference_data_schema.sql` — توسيع 4 جداول + إنشاء `salary_sources` + `version`.
+- ترحيل `009_reference_data_audit.sql` — `reference_data_audit_log` موحّد (CHECK + 3 فهارس).
+- ترحيل `010_seed_reference_data.sql` — 26 صفاً، `ON CONFLICT (code) DO NOTHING`، منفصل تماماً.
+- ADR-008 (10 قرارات) في `04-DECISIONS.md` §8.
+- `referenceData.validation.ts` + `referenceData.service.ts` (خدمة عامة للخمسة).
+- `/api/reference/{salary-grades,cadres,classifications,position-types,salary-sources}` (10 نقاط نهاية).
+- `ReferenceDataManager.tsx` + 5 صفحات رقيقة + routes + 5 عناصر تنقّل.
+- `GET /api/jobs/:id` يعيد `positions` (GAP-M-004).
+- `migrations/seeds/README.md` — توثيق 26 صفاً بالسطر والمصدر ومستوى الثقة.
+
+### مُغلق
+- **BLK-011**: ✅ الجداول المرجعية الفارغة لم تعد تعطّل `Jobs.tsx`.
+
+### مؤجل / متابعة
+- تحويل `positions.source` إلى FK على `salary_sources` — خارج نطاق Sprint 5 (ADR-008 §8.5).
+- **GAP-L-002** تبقى جزئية 55% (PDF عربي + Excel) — P2.
+- **BLK-007** (`user_log`) — P2.
+
+### الأرقام
+- Backend: 136 → **191/191** (23 suites).
+- Frontend: **3/3**.
+- الإجمالي: **194/194**.
+- التقدم: 13/44 → **21/48 = 43.75%**.
+
 ## [0.6.0] - 08 نوفمبر 2026 — Sprint 4 (البيانات المرجعية)
 
 ### أُضيف
