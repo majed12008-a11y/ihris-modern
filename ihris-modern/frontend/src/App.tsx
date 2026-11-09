@@ -24,6 +24,11 @@ import ReportForm from "@/pages/ReportForm";
 import ReportExecute from "@/pages/ReportExecute";
 import Countries from "@/pages/Countries";
 import Jobs from "@/pages/Jobs";
+import SalaryGrades from "@/pages/SalaryGrades";
+import Cadres from "@/pages/Cadres";
+import Classifications from "@/pages/Classifications";
+import PositionTypes from "@/pages/PositionTypes";
+import SalarySources from "@/pages/SalarySources";
 
 function LoadingSpinner() {
   return (
@@ -86,6 +91,11 @@ export default function App() {
           <Route path="reports/:id/execute" element={<ReportExecute />} />
           <Route path="countries" element={<Countries />} />
           <Route path="jobs" element={<Jobs />} />
+          <Route path="reference/salary-grades" element={<SalaryGrades />} />
+          <Route path="reference/cadres" element={<Cadres />} />
+          <Route path="reference/classifications" element={<Classifications />} />
+          <Route path="reference/position-types" element={<PositionTypes />} />
+          <Route path="reference/salary-sources" element={<SalarySources />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

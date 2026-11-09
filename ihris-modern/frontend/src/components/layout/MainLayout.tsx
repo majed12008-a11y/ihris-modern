@@ -12,6 +12,10 @@ import {
   Building2,
   Globe2,
   Layers,
+  Wallet,
+  UserCog,
+  Tags,
+  Landmark,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 
@@ -21,6 +25,11 @@ const navigation = [
   { name: "المنشآت", path: "/facilities", icon: Building2 },
   { name: "الوظائف", path: "/positions", icon: Briefcase },
   { name: "المسميات الوظيفية", path: "/jobs", icon: Layers },
+  { name: "درجات الرواتب", path: "/reference/salary-grades", icon: Wallet },
+  { name: "الفئات الوظيفية", path: "/reference/cadres", icon: UserCog },
+  { name: "التصنيفات الوظيفية", path: "/reference/classifications", icon: Tags },
+  { name: "أنواع الوظائف", path: "/reference/position-types", icon: Briefcase },
+  { name: "مصادر الرواتب", path: "/reference/salary-sources", icon: Landmark },
   { name: "الدول", path: "/countries", icon: Globe2 },
   { name: "الرواتب", path: "/salaries", icon: CreditCard },
   { name: "التدريب", path: "/training", icon: BookOpen },
