@@ -11,10 +11,14 @@
 | `005_facility_version_and_audit.sql` | 2026-11-06 | **ihris_test_gap001** فقط | Lead Implementation Engineer | ✅ مطبَّق ومُتحقَّق (idempotent + rollback مُختبَر) |
 | `006_country_version_and_audit.sql` | 2026-11-08 | **ihris_test_gap001** فقط | Lead Implementation Engineer | ✅ مطبَّق ومُتحقَّق (idempotent + rollback مُختبَر) |
 | `007_job_version_and_audit.sql` | 2026-11-08 | **ihris_test_gap001** فقط | Lead Implementation Engineer | ✅ مطبَّق ومُتحقَّق (idempotent + rollback مُختبَر) |
+| `008_reference_data_schema.sql` | 2026-11-08 | **ihris_test_gap001** فقط | Lead Implementation Engineer | ✅ مطبَّق ومُتحقَّق (idempotent + rollback مُختبَر) |
+| `009_reference_data_audit.sql` | 2026-11-08 | **ihris_test_gap001** فقط | Lead Implementation Engineer | ✅ مطبَّق ومُتحقَّق (idempotent + rollback مُختبَر) |
+| `010_seed_reference_data.sql` | 2026-11-08 | **ihris_test_gap001** فقط (تطوير/اختبار) | Lead Implementation Engineer | ✅ مطبَّق ومُتحقَّق (idempotent + rollback مُختبَر) |
 
 > **Note: `ihris_test_gap001` retained for human review as of 2026-11-08.**
 > لا تُحذف قاعدة الاختبار؛ تُترك للمراجعة البشرية ولإعادة تشغيل اختبارات
-> GAP-002/GAP-003 وSprint 2.5 وGAP-004/005/006 وSprint 4 (GAP-M-005..010).
+> GAP-002/GAP-003 وSprint 2.5 وGAP-004/005/006 وSprint 4 (GAP-M-005..010)
+> وSprint 5 (البيانات المرجعية + Seed).
 
 ## تفاصيل التنفيذ
 
@@ -109,6 +113,44 @@
 
 > **تنويه احتفاظ:** `job_audit_log` بلا FK إلى `jobs` عمداً، ليبقى سجل التدقيق بعد الحذف
 > الفيزيائي للمسمى. تفرّد `jobs.title` يُفرض تطبيقياً لا بـUNIQUE في DB (مطابقة للقديم).
+
+## تفاصيل ترحيل 008 (Sprint 5 — مخطط البيانات المرجعية)
+
+| البند | القيمة |
+|-------|--------|
+| القاعدة | `ihris_test_gap001` فقط |
+| المحتوى | `salary_grades` (+`code`,`description`,`startSalary`,`endSalary`,`midpointSalary`,`notes`,`version`) + `cadres` (+`code`,`description`,`version`) + `classifications` (+`version`) + `position_types` (+`code`,`description`,`version`) + جدول `salary_sources` كامل + فهارس فريدة على `code` |
+| Idempotency | ✅ تطبيق ثانٍ: NOTICE فقط |
+| Rollback | ✅ `rollback/008_reference_data_schema_rollback.sql` (يحذف `salary_sources` والأعمدة/الفهارس المضافة) |
+| الإنتاج `ihris_manage` | ❌ لم تُمسّ |
+| الحالة في الإنتاج | ⏳ **pending** |
+
+## تفاصيل ترحيل 009 (Sprint 5 — التدقيق الموحّد)
+
+| البند | القيمة |
+|-------|--------|
+| القاعدة | `ihris_test_gap001` فقط |
+| المحتوى | `reference_data_audit_log` (entityType/entityId/action/changedBy/changedAt/oldValues/newValues/reason) + CHECK للـaction والكيان + 3 فهارس |
+| Idempotency | ✅ تطبيق ثانٍ: `DO` + NOTICE فقط |
+| Rollback | ✅ `rollback/009_reference_data_audit_rollback.sql` |
+| الإنتاج `ihris_manage` | ❌ لم تُمسّ |
+| الحالة في الإنتاج | ⏳ **pending** |
+
+> **تنويه احتفاظ:** `reference_data_audit_log` بلا FK عمداً، ليبقى السجل بعد الحذف الفيزيائي.
+
+## تفاصيل ترحيل 010 (Sprint 5 — Seed)
+
+| البند | القيمة |
+|-------|--------|
+| القاعدة | `ihris_test_gap001` فقط — **لا يُطبَّق تلقائياً في الإنتاج** |
+| المحتوى | 26 صفاً FACT من `DB export.sql` (`ihris_manage`): 5 درجات + 4 فئات + 6 تصنيفات + 4 أنواع + 7 مصادر |
+| Idempotency | ✅ `ON CONFLICT (code) DO NOTHING` → `INSERT 0 0` عند الإعادة |
+| Rollback | ✅ `rollback/010_seed_reference_data_rollback.sql` — `DELETE WHERE code IN (...)` فقط |
+| التوثيق صفاً بصف | `migrations/seeds/README.md` (المصدر/السطر/مستوى الثقة) |
+| الإنتاج `ihris_manage` | ❌ لم تُمسّ |
+| الحالة في الإنتاج | ⏳ **pending — قرار يدوي بقاعدة منفصلة** |
+
+> **لا يُدمج 010 مع 008/009**، ولا يُنفَّذ تلقائياً عند النشر. Seed الإنتاج يحتاج قراراً بشرياً.
 
 ## ملاحظة تصحيحية مهمة
 

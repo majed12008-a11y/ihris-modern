@@ -639,3 +639,75 @@
 - 12/12 سيناريو قبول + 8/8 أمان + 8/8 وحدة.
 - Regression: 108 + 28 = 136 backend + 3 frontend = **139/139**.
 - الترحيلان 006/007: idempotent + rollback.
+
+---
+
+## ADR-008: تأسيس البيانات المرجعية + Seed واقعي — Sprint 5
+
+### 8.1 السياق
+
+Sprint 4 أغلق CRUD الدول والمسميات الوظيفية، لكن `Jobs.tsx` كانت «صالحة تقنياً وغير
+صالحة للاستخدام»: قوائم `salary_grades`/`cadres`/`classifications` فارغة (0 صف)،
+ولا توجد CRUD لها. أُضيفت 4 فجوات مرجعية جديدة (GAP-M-012..015) وسُجّل **BLK-011**.
+كما اتضح أن `DB export.sql` يحوي بيانات فعلية كاملة لهذه الجداول، وهي أفضل مصدر للـSeed.
+
+### 8.2 القرارات (10)
+
+| # | السؤال | القرار |
+|---|--------|--------|
+| 1 | نمط التنفيذ | **توسيع ADR-007** حرفياً: نفس الخدمة العامة، نفس التحقق، نفس الأدوار |
+| 2 | Soft أم Hard delete؟ | **Hard** + عدّ المراجع تطبيقياً → 422 |
+| 3 | Audit | **جدول موحّد** `reference_data_audit_log` (entityType + entityId) بدل 5 جداول |
+| 4 | Version field | **نعم** لكل الجداول الخمسة + `updateMany({id, version})` → 409 |
+| 5 | UI | **مكوّن واحد** `ReferenceDataManager.tsx` + 5 صفحات رقيقة (إعدادات تعريفية) |
+| 6 | ترتيب التنفيذ | `salary_grades` → `cadres` → `classifications` → `position_types` → `salary_sources` |
+| 7 | Seed Data | **أولوية مطلقة للبيانات الفعلية** من `DB export.sql` (26 صفاً FACT) — لا تقديرات |
+| 8 | الأدوار | `admin` + `hr_manager`: CRUD؛ `admin`: حذف؛ `hr_staff`: قراءة |
+| 9 | End-to-end | اختبار إلزامي: إنشاء job بمراجع seeded → 201؛ حذف درجة مستخدمة → 422 |
+| 10 | ترقيم الترحيلات | `008_reference_data_schema.sql` + `009_reference_data_audit.sql` + `010_seed_reference_data.sql` (**منفصل**) |
+
+### 8.3 تفاصيل الـSeed (BLK-011)
+
+| الجدول | الصفوف | المصدر | مستوى الثقة |
+|--------|--------|--------|-------------|
+| `salary_grades` | 5 | `DB export.sql` 56422–56427 (`ihris_manage`) | FACT |
+| `cadres` | 4 | 50199–50203 | FACT |
+| `classifications` | 6 | 50226–50232 (بأكواد ISCO الأصلية) | FACT |
+| `position_types` | 4 | 55315–55319 | FACT |
+| `salary_sources` | 7 | 56448–56455 | FACT |
+| **الإجمالي** | **26** | — | — |
+
+- الأسماء **إنجليزية حرفياً** كما في القديم (لتفادي تكرار عند ترحيل البيانات القديمة).
+- الترجمة العربية تُحفظ في `description` مع وسم `[ترجمة]`.
+- `code` مشتق (القديم بلا كود لـ4 جداول) → مستوى **DERIVED**، موثّق صفاً بصف.
+- `startSalary`/`endSalary`/`midpointSalary` تبقى `NULL` — **لا اختراع أرقام رواتب**.
+- الـSeed يعمل `ON CONFLICT (code) DO NOTHING` → idempotent، وrollback يحذف
+  `WHERE code IN (...)` فقط (لا `TRUNCATE`، لا مساس بصفوف أُدخلت يدوياً).
+
+> **لماذا لا تُستخدم أرقام «قانون 43» الاسترشادية؟** لأن البيانات الفعلية موجودة
+> في `DB export.sql`، وهي متوافقة 100% مع النظام القديم وتُغني عن أي تقدير.
+
+### 8.4 الحماية من الحذف
+
+| الجدول | المراجع المفحوصة | عند الاستخدام |
+|--------|-------------------|----------------|
+| `salary_grades` | `jobs.salaryGradeId` | 422 |
+| `cadres` | `jobs.cadreId` | 422 |
+| `classifications` | `jobs.classificationId` | 422 |
+| `position_types` | `positions.posTypeId` | 422 |
+| `salary_sources` | لا FK (نص حر في `positions.source`) | حذف مسموح — يُوثَّق |
+
+### 8.5 `salary_sources` — قرار النطاق
+
+الجدول **جديد**، والقائمة المرجعية مستقلة. تحويل `positions.source` من `varchar` إلى FK
+**لا يُنفَّذ** في Sprint 5:
+- القديم يعامله نصاً حراً (لا FK في `hippo_position`).
+- التحويل يتطلب ترحيل بيانات نصية غير معيارية + تغيير شاشة الوظائف.
+- يُسجَّل كبند متابعة في `05-BLOCKERS.md`.
+
+### 8.6 بوابة Sprint 5
+
+- 20/20 CRUD + 2/2 E2E/Seed + 10/10 أمان + وحدة.
+- Regression: 139 + الجديد = الإجمالي.
+- الترحيلات 008/009/010: idempotent + rollback مُختبَر.
+- `ihris_manage` لم تُمسّ؛ الـSeed على `ihris_test_gap001` فقط.
