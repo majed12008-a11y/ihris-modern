@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/services/api";
 import { useAuthStore } from "@/store/authStore";
@@ -14,6 +15,7 @@ import {
   Briefcase,
   Save,
   X,
+  Eye,
 } from "lucide-react";
 
 interface Ref {
@@ -66,6 +68,7 @@ const PAGE_SIZE = 20;
 
 export default function Jobs() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const currentUser = useAuthStore((state) => state.user);
   const canWrite = currentUser?.role === "admin" || currentUser?.role === "hr_manager";
   const isAdmin = currentUser?.role === "admin";
@@ -268,6 +271,13 @@ export default function Jobs() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => navigate(`/jobs/${row.id}`)}
+                        className="text-gray-600 hover:text-gray-900 p-1"
+                        title="عرض التفاصيل"
+                      >
+                        <Eye size={18} />
+                      </button>
                       {canWrite && (
                         <button
                           onClick={() => openEdit(row)}

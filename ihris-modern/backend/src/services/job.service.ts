@@ -49,6 +49,23 @@ function ref(row: any) {
   return row ? { id: row.id, name: row.name } : null;
 }
 
+/**
+ * GAP-M-004: تفاصيل الوظيفة تشمل المناصب التابعة لها.
+ * `positions` لا تُحمَّل في القائمة (أداء) — فقط في getById.
+ */
+const DETAIL_INCLUDE = {
+  ...LIST_INCLUDE,
+  positions: {
+    include: {
+      posType: true,
+      status: true,
+      facility: { select: { id: true, name: true } },
+      department: { select: { id: true, name: true } },
+    },
+    orderBy: { id: "asc" as const },
+  },
+} as const;
+
 function toPublic(job: any) {
   return {
     id: job.id,
@@ -67,6 +84,28 @@ function toPublic(job: any) {
     positionsCount:
       job._count?.positions ??
       (Array.isArray(job.positions) ? job.positions.length : 0),
+    ...(Array.isArray(job.positions) && {
+      positions: job.positions.map((position: any) => ({
+        id: position.id,
+        code: position.code ?? null,
+        title: position.title ?? null,
+        description: position.description ?? null,
+        proposedSalary: position.proposedSalary ?? null,
+        source: position.source ?? null,
+        posTypeId: position.posTypeId ?? null,
+        posType: position.posType ? { id: position.posType.id, name: position.posType.name } : null,
+        statusId: position.statusId ?? null,
+        status: position.status ? { id: position.status.id, name: position.status.name } : null,
+        facilityId: position.facilityId ?? null,
+        facility: position.facility ?? null,
+        departmentId: position.departmentId ?? null,
+        department: position.department ?? null,
+        proposedHiringDate: position.proposedHiringDate ?? null,
+        proposedEndDate: position.proposedEndDate ?? null,
+        postedDate: position.postedDate ?? null,
+        comments: position.comments ?? null,
+      })),
+    }),
   };
 }
 
@@ -195,7 +234,7 @@ export class JobService {
   static async getById(id: number) {
     const job = await prisma.job.findUnique({
       where: { id },
-      include: LIST_INCLUDE,
+      include: DETAIL_INCLUDE,
     });
     if (!job) throw notFound("المسمى الوظيفي غير موجود");
     return toPublic(job);
