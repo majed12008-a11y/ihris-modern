@@ -352,12 +352,17 @@ model Region {
 }
 
 model JobType {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique @db.VarChar(100)
-  createdAt DateTime @default(now())
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(100)
+  // ADR-008: كود ووصف وإصدار للبيانات المرجعية
+  code        String?  @unique @db.VarChar(50)
+  description String?  @db.Text
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
 
   positions Position[]
 
+  @@index([name])
   @@map("position_types")
 }
 
@@ -372,34 +377,79 @@ model PositionStatus {
 }
 
 model SalaryGrade {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique @db.VarChar(100)
-  createdAt DateTime @default(now())
+  id             Int      @id @default(autoincrement())
+  name           String   @unique @db.VarChar(100)
+  // ADR-008: بنية مطابقة للقديم (hippo_salary_grade) — القيم المالية تبقى NULL
+  code           String?  @unique @db.VarChar(50)
+  description    String?  @db.Text
+  startSalary    String?  @db.VarChar(255)
+  endSalary      String?  @db.VarChar(255)
+  midpointSalary String?  @db.VarChar(255)
+  notes          String?  @db.Text
+  version        Int      @default(1)
+  createdAt      DateTime @default(now())
 
   jobs Job[]
 
+  @@index([name])
   @@map("salary_grades")
 }
 
+model SalarySource {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(100)
+  code        String?  @unique @db.VarChar(50)
+  description String?  @db.Text
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+
+  @@map("salary_sources")
+}
+
+// ADR-008: سجل تدقيق موحّد للبيانات المرجعية الخمسة.
+// بلا FK عمداً: الحذف فيزيائي ويجب أن يبقى السجل بعده.
+model ReferenceDataAuditLog {
+  id         Int      @id @default(autoincrement())
+  entityType String   @db.VarChar(40)
+  entityId   Int
+  action     String   @db.VarChar(20)
+  changedBy  Int
+  changedAt  DateTime @default(now())
+  oldValues  Json?
+  newValues  Json?
+  reason     String?  @db.Text
+
+  @@index([entityType, entityId, changedAt(sort: Desc)])
+  @@index([action])
+  @@index([changedAt])
+  @@map("reference_data_audit_log")
+}
+
 model Cadre {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique @db.VarChar(100)
-  createdAt DateTime @default(now())
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(100)
+  code        String?  @unique @db.VarChar(50)
+  description String?  @db.Text
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
 
   jobs Job[]
 
+  @@index([name])
   @@map("cadres")
 }
 
 model Classification {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique @db.VarChar(100)
-  description String? @db.Text
-  code      String?  @db.VarChar(50)
-  createdAt DateTime @default(now())
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(100)
+  description String?  @db.Text
+  code        String?  @unique @db.VarChar(50)
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
 
   jobs Job[]
 
+  @@index([name])
   @@map("classifications")
 }
 

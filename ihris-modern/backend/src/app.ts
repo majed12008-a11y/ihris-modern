@@ -13,6 +13,7 @@ import salaryRoutes from "./routes/salary";
 import trainingRoutes from "./routes/training";
 import userRoutes from "./routes/user";
 import reportRoutes from "./routes/report";
+import referenceRoutes from "./routes/reference";
 
 export function createApp() {
   const app = express();
@@ -38,6 +39,7 @@ export function createApp() {
   app.use("/api/training", trainingRoutes);
   app.use("/api/users", userRoutes);
   app.use("/api/reports", reportRoutes);
+  app.use("/api/reference", referenceRoutes);
 
   // 404 handler
   app.use((_req, res) => {
