@@ -14,11 +14,15 @@
 | `008_reference_data_schema.sql` | 2026-11-08 | **ihris_test_gap001** فقط | Lead Implementation Engineer | ✅ مطبَّق ومُتحقَّق (idempotent + rollback مُختبَر) |
 | `009_reference_data_audit.sql` | 2026-11-08 | **ihris_test_gap001** فقط | Lead Implementation Engineer | ✅ مطبَّق ومُتحقَّق (idempotent + rollback مُختبَر) |
 | `010_seed_reference_data.sql` | 2026-11-08 | **ihris_test_gap001** فقط (تطوير/اختبار) | Lead Implementation Engineer | ✅ مطبَّق ومُتحقَّق (idempotent + rollback مُختبَر) |
+| `011_training_schema.sql` | 2026-11-14 | **ihris_test_gap001** فقط | Lead Implementation Engineer | ✅ مطبَّق ومُتحقَّق (idempotent + rollback مُختبَر) |
+| `012_training_audit.sql` | 2026-11-14 | **ihris_test_gap001** فقط | Lead Implementation Engineer | ✅ مطبَّق ومُتحقَّق (idempotent + rollback مُختبَر) |
+| `013_positions_source_fk.sql` | 2026-11-14 | **ihris_test_gap001** فقط | Lead Implementation Engineer | ✅ مطبَّق ومُتحقَّق (idempotent + rollback مُختبَر) |
+| `014_seed_training.sql` | 2026-11-14 | **ihris_test_gap001** فقط (تطوير/اختبار) | Lead Implementation Engineer | ✅ مطبَّق ومُتحقَّق (idempotent + rollback مُختبَر) |
 
-> **Note: `ihris_test_gap001` retained for human review as of 2026-11-08.**
+> **Note: `ihris_test_gap001` retained for human review as of 2026-11-14.**
 > لا تُحذف قاعدة الاختبار؛ تُترك للمراجعة البشرية ولإعادة تشغيل اختبارات
 > GAP-002/GAP-003 وSprint 2.5 وGAP-004/005/006 وSprint 4 (GAP-M-005..010)
-> وSprint 5 (البيانات المرجعية + Seed).
+> وSprint 5 (البيانات المرجعية + Seed) وSprint 6 (التدريب + Seed).
 
 ## تفاصيل التنفيذ
 
@@ -151,6 +155,56 @@
 | الحالة في الإنتاج | ⏳ **pending — قرار يدوي بقاعدة منفصلة** |
 
 > **لا يُدمج 010 مع 008/009**، ولا يُنفَّذ تلقائياً عند النشر. Seed الإنتاج يحتاج قراراً بشرياً.
+
+## تفاصيل ترحيل 011 (Sprint 6 — مخطط التدريب)
+
+| البند | القيمة |
+|-------|--------|
+| القاعدة | `ihris_test_gap001` فقط |
+| المحتوى | `training_courses`: `version`/`deletedAt`/`updatedAt` + 4 فهارس؛ `training_institutions`: `version`/`updatedAt`؛ `scheduled_training_courses`: `status` + CHECK + `version`/`updatedAt` + 3 فهارس؛ فهرسان على `person_scheduled_training_courses` |
+| Idempotency | ✅ `IF NOT EXISTS` + `DO` block |
+| Rollback | ✅ `rollback/011_training_schema_rollback.sql` |
+| الإنتاج `ihris_manage` | ❌ لم تُمسّ |
+| الحالة في الإنتاج | ⏳ **pending** |
+
+## تفاصيل ترحيل 012 (Sprint 6 — تدقيق التدريب)
+
+| البند | القيمة |
+|-------|--------|
+| القاعدة | `ihris_test_gap001` فقط |
+| المحتوى | `training_audit_log` (entityType/entityId/action/changedBy/changedAt/oldValues/newValues/reason) + 3 فهارس |
+| Idempotency | ✅ `CREATE TABLE/INDEX IF NOT EXISTS` |
+| Rollback | ✅ `rollback/012_training_audit_rollback.sql` |
+| الإنتاج `ihris_manage` | ❌ لم تُمسّ |
+| الحالة في الإنتاج | ⏳ **pending** |
+
+> **تنويه احتفاظ:** `training_audit_log` بلا FK عمداً، ليبقى السجل بعد الحذف الفيزيائي للمؤسسة.
+
+## تفاصيل ترحيل 013 (Sprint 6 — `positions.sourceId` FK)
+
+| البند | القيمة |
+|-------|--------|
+| القاعدة | `ihris_test_gap001` فقط |
+| المحتوى | `positions.sourceId INTEGER` + FK → `salary_sources(id)` بـ`ON UPDATE CASCADE ON DELETE RESTRICT` + فهرس + ترحيل رقمي آمن للقيم النصية الرقمية |
+| Idempotency | ✅ `IF NOT EXISTS` + `DO` block |
+| Rollback | ✅ `rollback/013_positions_source_fk_rollback.sql` |
+| الإنتاج `ihris_manage` | ❌ لم تُمسّ |
+| الحالة في الإنتاج | ⏳ **pending** |
+
+> **العمود النصي `positions.source` يبقى** للتوافق مع البيانات القديمة؛ القيم الرقمية
+> القديمة (69/71/72/73) تُرحَّل فقط إذا وُجد المعرّف في `salary_sources` (seed 1–7 لا يطابقها).
+
+## تفاصيل ترحيل 014 (Sprint 6 — Seed التدريب)
+
+| البند | القيمة |
+|-------|--------|
+| القاعدة | `ihris_test_gap001` فقط — **لا يُطبَّق تلقائياً في الإنتاج** |
+| المحتوى | 16 صفاً FACT: 3 مؤسسات + 2 حالات + 5 تصنيفات + 3 دورات + 3 دورات مجدولة؛ + صفّا تسجيل مشروطان بـ`EXISTS` (لم يُدرجا) |
+| Idempotency | ✅ `ON CONFLICT (id) DO NOTHING` |
+| Rollback | ✅ `rollback/014_seed_training_rollback.sql` — `DELETE WHERE id IN (...)` فقط |
+| التوثيق صفاً بصف | `migrations/seeds/README.md` §6 |
+| الإنتاج `ihris_manage` | ❌ لم تُمسّ |
+| الحالة في الإنتاج | ⏳ **pending — قرار يدوي بقاعدة منفصلة** |
 
 ## ملاحظة تصحيحية مهمة
 

@@ -15,6 +15,9 @@ import Salaries from "@/pages/Salaries";
 import SalaryForm from "@/pages/SalaryForm";
 import Training from "@/pages/Training";
 import TrainingForm from "@/pages/TrainingForm";
+import TrainingInstitutions from "@/pages/TrainingInstitutions";
+import ScheduledCourseForm from "@/pages/ScheduledCourseForm";
+import EnrolledStudents from "@/pages/EnrolledStudents";
 import Users from "@/pages/Users";
 import UserForm from "@/pages/UserForm";
 import DeletedUsers from "@/pages/DeletedUsers";
@@ -81,6 +84,11 @@ export default function App() {
           <Route path="salaries/:id/edit" element={<SalaryForm />} />
           <Route path="training" element={<Training />} />
           <Route path="training/new" element={<TrainingForm />} />
+          <Route path="training/institutions" element={<TrainingInstitutions />} />
+          <Route path="training/courses/:id/edit" element={<TrainingForm />} />
+          <Route path="training/courses/:courseId/schedule/new" element={<ScheduledCourseForm />} />
+          <Route path="training/scheduled/:scheduledId/edit" element={<ScheduledCourseForm />} />
+          <Route path="training/scheduled/:id/enrollments" element={<EnrolledStudents />} />
           <Route path="users" element={<Users />} />
           <Route path="users/new" element={<UserForm />} />
           <Route path="users/deleted" element={<DeletedUsers />} />

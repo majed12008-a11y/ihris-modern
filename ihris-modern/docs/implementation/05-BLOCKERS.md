@@ -1,6 +1,6 @@
 # العوائق (Blockers)
 
-> آخر تحديث: 08 نوفمبر 2026 — بعد Sprint 5 (إغلاق BLK-011، GAP-FE-010/011/012 + GAP-M-004/012/013/014/015).
+> آخر تحديث: 14 نوفمبر 2026 — بعد Sprint 6 (GAP-FE-007/008/009 + GAP-H-001/002 + ADR-009 + ترحيلات 011–014).
 
 ## العوائق الحالية
 
@@ -24,6 +24,7 @@
 | **BLK-009** | ✅ **مغلق** | **2026-11-08** | **BLK-009 CLOSED — Decision: Keep regions independent.** Rationale: النظام القديم (BR-049) يعامل `region` كبُعد منفصل، ولا `countryId` في `regions`. Cascade ثلاثي `country → district → county` + `region` مستقل. **Revisit: P3** إذا أبلغ المستخدمون عن مشكلة في التسلسل الجغرافي. موثّق في ADR-007 §7.3. |
 | **BLK-010** | ✅ **مغلق** | **2026-11-08** | **فحص موثّق:** `hippo_facility` (§3.4 من `02-OLD-DATA-DICTIONARY.md`) = `id, name, facility_type, district, county, country, region` — **لا يوجد `code`**. لا إشارة لكود منشأة في BR-047..051. القرار: **not in old system — deferred**، ولا migration 006. البحث بالاسم فقط (مطابق للقديم). |
 | **BLK-011** | ✅ **مغلق** | **2026-11-08** | **Sprint 5:** الجداول المرجعية كانت فارغة وتعطّل `Jobs.tsx`. أُنشئت CRUD كاملة للخمسة (`/api/reference/*` + `ReferenceDataManager.tsx` + 5 صفحات)، وطُبّق Seed فعلي من `DB export.sql` (26 صفاً FACT: 5 درجات + 4 فئات + 6 تصنيفات + 4 أنواع + 7 مصادر) مع migration 010 منفصل وrollback. اختبار E2E: إنشاء job بمراجع seeded → 201، وحذف مرجع مستخدم → 422. الدليل: `reference.test.ts` 21–22 + `reference.security.test.ts` + `reference.extra.test.ts`. |
+| **BLK-012** | ✅ **مغلق** | **2026-11-14** | **Sprint 6:** وحدة التدريب كانت قراءة/إنشاء فقط، ولا توجد شاشات للدورات المجدولة/المتدربين. أُغلق بتحليل GAP-H-001/002 + CRUD كامل + `training_audit_log` + 33 اختباراً جديداً. الدليل: `training.test.ts` 17/17 + `training.security.test.ts` 10/10 + `training.validation.test.ts` 6/6. |
 
 ## العوائق المحتملة (لم تحدث بعد)
 
@@ -88,6 +89,24 @@
 | migrations 008/009/010 idempotent + rollback | ✅ | طُبِّق ثم أُعيد ثم rollback ثم أُعيد |
 | Seed كل صف موثّق بمصدره | ✅ | `migrations/seeds/README.md` |
 
+## بوابة Sprint 6 — النتيجة
+
+| البند | الحالة | الدليل |
+|-------|--------|--------|
+| ADR-009 (10 قرارات) قبل التنفيذ | ✅ | `04-DECISIONS.md` §9 |
+| GAP-FE-007/008/009 (دورات + مؤسسات) | ✅ | `TrainingForm.tsx` + `Training.tsx` + `TrainingInstitutions.tsx` |
+| GAP-H-001/002 (دورات مجدولة + متدربون) | ✅ | `ScheduledCourseForm.tsx` + `EnrolledStudents.tsx` |
+| 18/18 سيناريو قبول | ✅ | 17 في `training.test.ts` + 1 في `MainLayout.test.tsx` |
+| 10/10 أمان + 6/6 وحدة | ✅ | `training.security.test.ts` + `training.validation.test.ts` |
+| Regression 194 + 33 = 227/227 | ✅ | backend 227/227 + frontend 7/7 |
+| migrations 011/012/013/014 idempotent + rollback | ✅ | طُبّق ثم أُعيد ثم rollback ثم أُعيد |
+| Seed 16 صفاً FACT من `DB export.sql` | ✅ | `migrations/seeds/README.md` |
+| صفّا تسجيل مؤجلان بشرط `EXISTS` | ✅ | `people` فارغ — لم يُدرجا |
+| `positions.sourceId` FK + `ON DELETE RESTRICT` | ✅ | migration 013 + `training.test.ts` 16–17 |
+| Polish: تجميع التنقّل + عرض 422 | ✅ | `MainLayout.tsx` + `lib/errorDetails.ts` |
+| `ihris_manage` لم تُمسّ؛ لا push | ✅ | الـseed على `ihris_test_gap001` فقط |
+
+
 ## ما لا يزال مفتوحاً (ليس عائقاً حاجزاً)
 
 | البند | الحالة | ملاحظة |
@@ -95,7 +114,7 @@
 | BLK-006 | مفتوح | ملحق تصحيحي جاهز؛ ينتظر اطلاع الإدارة |
 | BLK-007 | مؤجل P2 | `user_log` غير منقول — لم يبدأ بقرار صريح |
 | إدارة المراجع الفرعية | ✅ مغلق في Sprint 5 | `salary_grades`/`cadres`/`classifications`/`position_types`/`salary_sources` |
-| `positions.source` كنص حر | متابعة | لم يُحوَّل إلى FK على `salary_sources` — ADR-008 §8.5 |
+| `positions.source` كنص حر | ✅ مغلق في Sprint 6 | `positions.sourceId` FK → `salary_sources` (migration 013) |
 | PDF عربي | قيد معروف | CSV/JSON سليمان؛ PDF إنجليزي فقط — GAP-L-002 جزئية (P2) |
 | Excel export | غير منفّذ | GAP-L-002 جزئية (P2) |
 | scheduling (GAP-L-001) | مؤجل P3 | بقرار ADR-004 |

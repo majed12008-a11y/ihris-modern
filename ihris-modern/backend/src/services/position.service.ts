@@ -7,6 +7,8 @@ export interface PositionCreateInput {
   description?: string | null;
   proposedSalary?: string | null;
   source?: string | null;
+  // ADR-009 §9.2 (8): FK إلى salary_sources
+  sourceId?: number | null;
   supervisorId?: number | null;
   facilityId?: number | null;
   departmentId?: number | null;
@@ -102,6 +104,7 @@ export class PositionService {
         description: data.description ?? null,
         proposedSalary: data.proposedSalary ?? null,
         source: data.source ?? null,
+        sourceId: data.sourceId ?? null,
         supervisorId: data.supervisorId ?? null,
         facilityId: data.facilityId ?? null,
         departmentId: data.departmentId ?? null,
@@ -131,6 +134,7 @@ export class PositionService {
         ...(data.description !== undefined && { description: data.description }),
         ...(data.proposedSalary !== undefined && { proposedSalary: data.proposedSalary }),
         ...(data.source !== undefined && { source: data.source }),
+        ...(data.sourceId !== undefined && { sourceId: data.sourceId }),
         ...(data.supervisorId !== undefined && { supervisorId: data.supervisorId }),
         ...(data.facilityId !== undefined && { facilityId: data.facilityId }),
         ...(data.departmentId !== undefined && { departmentId: data.departmentId }),

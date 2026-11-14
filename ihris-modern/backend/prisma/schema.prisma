@@ -36,9 +36,9 @@ model User {
   isActive     Boolean @default(true)
   tokenVersion Int     @default(1)
 
-  access    UserAccess[]
-  person    Person?  @relation(fields: [personId], references: [id])
-  personId  Int?     @unique
+  access   UserAccess[]
+  person   Person?      @relation(fields: [personId], references: [id])
+  personId Int?         @unique
 
   reportDefinitions ReportDefinition[] @relation("ReportDefinitionCreator")
   reportExecutions  ReportExecution[]  @relation("ReportExecutionRunner")
@@ -53,14 +53,14 @@ model User {
 // بلا علاقة FK إلى users عمداً حتى يبقى السجل بعد أي purge نهائي (P3).
 // لا تُكتب كلمة المرور أو hashها في oldValues/newValues مطلقاً.
 model UserAuditLog {
-  id          Int      @id @default(autoincrement())
-  userId      Int
-  action      String   @db.VarChar(20)
-  changedBy   Int
-  changedAt   DateTime @default(now())
-  oldValues   Json?
-  newValues   Json?
-  reason      String?  @db.Text
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  action    String   @db.VarChar(20)
+  changedBy Int
+  changedAt DateTime @default(now())
+  oldValues Json?
+  newValues Json?
+  reason    String?  @db.Text
 
   @@index([userId, changedAt(sort: Desc)])
   @@index([action])
@@ -69,13 +69,13 @@ model UserAuditLog {
 }
 
 model Role {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique @db.VarChar(50)
-  displayName String @db.VarChar(100)
-  description String? @db.Text
-  createdAt DateTime @default(now())
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(50)
+  displayName String   @db.VarChar(100)
+  description String?  @db.Text
+  createdAt   DateTime @default(now())
 
-  userAccess UserAccess[]
+  userAccess  UserAccess[]
   permissions Permission[]
 
   @@map("roles")
@@ -87,8 +87,8 @@ model UserAccess {
   roleId    Int
   grantedAt DateTime @default(now())
 
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@unique([userId, roleId], name: "userId_roleId")
   @@map("user_access")
@@ -111,68 +111,71 @@ model Permission {
 // ============================================
 
 model Person {
-  id              Int       @id @default(autoincrement())
-  surname         String    @db.VarChar(255)
-  firstname       String    @db.VarChar(255)
-  othername       String?   @db.VarChar(255)
-  nationalityId   Int?
-  countryId       Int?
-  districtId      Int?
-  countyId        Int?
-  residenceCountryId Int?
+  id                  Int      @id @default(autoincrement())
+  surname             String   @db.VarChar(255)
+  firstname           String   @db.VarChar(255)
+  othername           String?  @db.VarChar(255)
+  nationalityId       Int?
+  countryId           Int?
+  districtId          Int?
+  countyId            Int?
+  residenceCountryId  Int?
   residenceDistrictId Int?
-  residenceCountyId Int?
-  password        String?   @db.VarChar(255)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  residenceCountyId   Int?
+  password            String?  @db.VarChar(255)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
-  user            User?
-  country         Country?   @relation(fields: [countryId], references: [id])
-  district        District?  @relation(fields: [districtId], references: [id])
-  county          County?    @relation(fields: [countyId], references: [id])
-  contacts        Contact[]
-  demographics    Demographic[]
-  ids             PersonId[]
-  languages       PersonLanguage[]
-  positions       PersonPosition[]
-  competencies    PersonCompetency[]
+  user               User?
+  country            Country?                  @relation(fields: [countryId], references: [id])
+  district           District?                 @relation(fields: [districtId], references: [id])
+  county             County?                   @relation(fields: [countyId], references: [id])
+  contacts           Contact[]
+  demographics       Demographic[]
+  ids                PersonId[]
+  languages          PersonLanguage[]
+  positions          PersonPosition[]
+  competencies       PersonCompetency[]
   scheduledTrainings PersonScheduledTraining[]
-  notes           Note[]
-  employments     Employment[]
-  educations      Education[]
-  benefits        Benefit[]
-  applications    Application[]
-  salaries        Salary[]
+  notes              Note[]
+  employments        Employment[]
+  educations         Education[]
+  benefits           Benefit[]
+  applications       Application[]
+  salaries           Salary[]
 
   @@map("people")
 }
 
 model Position {
-  id              Int       @id @default(autoincrement())
-  code            String?   @db.VarChar(50)
-  jobId           Int?
-  title           String?   @db.VarChar(255)
-  description     String?   @db.Text
-  proposedSalary  String?   @db.VarChar(100)
-  source          String?   @db.VarChar(100)
-  supervisorId    Int?
-  facilityId      Int?
-  departmentId    Int?
-  posTypeId       Int?
-  proposedEndDate DateTime?
+  id                 Int       @id @default(autoincrement())
+  code               String?   @db.VarChar(50)
+  jobId              Int?
+  title              String?   @db.VarChar(255)
+  description        String?   @db.Text
+  proposedSalary     String?   @db.VarChar(100)
+  source             String?   @db.VarChar(100)
+  // ADR-009 §9.2 (8): FK حقيقي إلى salary_sources (العمود النصي source يبقى للتوافق)
+  sourceId           Int?
+  supervisorId       Int?
+  facilityId         Int?
+  departmentId       Int?
+  posTypeId          Int?
+  proposedEndDate    DateTime?
   proposedHiringDate DateTime?
-  statusId        Int?
-  postedDate      DateTime?
-  comments        String?   @db.Text
-  interviewComments String? @db.Text
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  statusId           Int?
+  postedDate         DateTime?
+  comments           String?   @db.Text
+  interviewComments  String?   @db.Text
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  job             Job?      @relation(fields: [jobId], references: [id])
-  facility        Facility? @relation(fields: [facilityId], references: [id])
-  department      Department? @relation(fields: [departmentId], references: [id])
-  posType         JobType? @relation(fields: [posTypeId], references: [id])
-  status          PositionStatus? @relation(fields: [statusId], references: [id])
+  job             Job?                @relation(fields: [jobId], references: [id])
+  facility        Facility?           @relation(fields: [facilityId], references: [id])
+  department      Department?         @relation(fields: [departmentId], references: [id])
+  posType         JobType?            @relation(fields: [posTypeId], references: [id])
+  status          PositionStatus?     @relation(fields: [statusId], references: [id])
+  salarySource    SalarySource?       @relation(fields: [sourceId], references: [id])
   personPositions PersonPosition[]
   decisions       PositionDecision[]
   interviews      PositionInterview[]
@@ -181,22 +184,22 @@ model Position {
 }
 
 model Job {
-  id              Int       @id @default(autoincrement())
-  title           String    @db.VarChar(255)
-  code            String?   @db.VarChar(50)
-  description     String?   @db.Text
-  salaryGradeId   Int?
-  cadreId         Int?
+  id               Int      @id @default(autoincrement())
+  title            String   @db.VarChar(255)
+  code             String?  @db.VarChar(50)
+  description      String?  @db.Text
+  salaryGradeId    Int?
+  cadreId          Int?
   classificationId Int?
   // ADR-007: قفل تفاؤلي لتعديل المسمى الوظيفي
-  version         Int       @default(1)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  version          Int      @default(1)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  positions       Position[]
-  salaryGrade     SalaryGrade? @relation(fields: [salaryGradeId], references: [id])
-  cadre           Cadre?    @relation(fields: [cadreId], references: [id])
-  classification  Classification? @relation(fields: [classificationId], references: [id])
+  positions      Position[]
+  salaryGrade    SalaryGrade?    @relation(fields: [salaryGradeId], references: [id])
+  cadre          Cadre?          @relation(fields: [cadreId], references: [id])
+  classification Classification? @relation(fields: [classificationId], references: [id])
 
   @@index([title])
   @@map("jobs")
@@ -221,24 +224,24 @@ model JobAuditLog {
 }
 
 model Facility {
-  id          Int       @id @default(autoincrement())
-  name        String    @db.VarChar(255)
+  id             Int      @id @default(autoincrement())
+  name           String   @db.VarChar(255)
   facilityTypeId Int?
-  districtId  Int?
-  countyId    Int?
-  countryId   Int?
-  regionId    Int?
+  districtId     Int?
+  countyId       Int?
+  countryId      Int?
+  regionId       Int?
   // ADR-006: قفل تفاؤلي لتعديل المنشأة
-  version     Int       @default(1)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  version        Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  positions   Position[]
+  positions    Position[]
   facilityType FacilityType? @relation(fields: [facilityTypeId], references: [id])
-  district    District?   @relation(fields: [districtId], references: [id])
-  county      County?     @relation(fields: [countyId], references: [id])
-  country     Country?    @relation(fields: [countryId], references: [id])
-  region      Region?     @relation(fields: [regionId], references: [id])
+  district     District?     @relation(fields: [districtId], references: [id])
+  county       County?       @relation(fields: [countyId], references: [id])
+  country      Country?      @relation(fields: [countryId], references: [id])
+  region       Region?       @relation(fields: [regionId], references: [id])
 
   @@index([name])
   @@map("facilities")
@@ -263,14 +266,14 @@ model FacilityAuditLog {
 }
 
 model Salary {
-  id          Int       @id @default(autoincrement())
-  personId    Int
-  startDate   DateTime
-  endDate     DateTime?
-  salary      String    @db.VarChar(100)
-  notes       String?   @db.Text
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id        Int       @id @default(autoincrement())
+  personId  Int
+  startDate DateTime
+  endDate   DateTime?
+  salary    String    @db.VarChar(100)
+  notes     String?   @db.Text
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
 
@@ -289,9 +292,9 @@ model Country {
   version   Int      @default(1)
   createdAt DateTime @default(now())
 
-  districts District[]
+  districts  District[]
   facilities Facility[]
-  people    Person[]
+  people     Person[]
 
   @@map("countries")
 }
@@ -320,23 +323,23 @@ model District {
   countryId Int
   createdAt DateTime @default(now())
 
-  country   Country  @relation(fields: [countryId], references: [id])
-  counties  County[]
+  country    Country    @relation(fields: [countryId], references: [id])
+  counties   County[]
   facilities Facility[]
-  people    Person[]
+  people     Person[]
 
   @@map("districts")
 }
 
 model County {
-  id        Int      @id @default(autoincrement())
-  name      String   @db.VarChar(100)
+  id         Int      @id @default(autoincrement())
+  name       String   @db.VarChar(100)
   districtId Int
-  createdAt DateTime @default(now())
+  createdAt  DateTime @default(now())
 
-  district  District @relation(fields: [districtId], references: [id])
+  district   District   @relation(fields: [districtId], references: [id])
   facilities Facility[]
-  people    Person[]
+  people     Person[]
 
   @@map("counties")
 }
@@ -403,7 +406,29 @@ model SalarySource {
   version     Int      @default(1)
   createdAt   DateTime @default(now())
 
+  // ADR-009 §9.2 (8): positions.sourceId → salary_sources (ON DELETE RESTRICT)
+  positions Position[]
+
   @@map("salary_sources")
+}
+
+// ADR-009 §9.2 (3): سجل تدقيق موحّد لكل كيانات التدريب.
+// لا FK على الكيانات عمداً: يبقى السجل بعد الحذف الفيزيائي للمؤسسة.
+model TrainingAuditLog {
+  id         Int      @id @default(autoincrement())
+  entityType String   @db.VarChar(40)
+  entityId   Int
+  action     String   @db.VarChar(20)
+  changedBy  Int
+  changedAt  DateTime @default(now())
+  oldValues  Json?
+  newValues  Json?
+  reason     String?  @db.Text
+
+  @@index([entityType, entityId, changedAt(sort: Desc)])
+  @@index([action])
+  @@index([changedAt])
+  @@map("training_audit_log")
 }
 
 // ADR-008: سجل تدقيق موحّد للبيانات المرجعية الخمسة.
@@ -478,21 +503,21 @@ model Department {
 // ============================================
 
 model Contact {
-  id          Int       @id @default(autoincrement())
-  personId    Int
-  contactType String?   @db.VarChar(50)
-  address     String?   @db.Text
-  telephone   String?   @db.VarChar(50)
-  altTelephone String?  @db.VarChar(50)
-  fax         String?   @db.VarChar(50)
-  email       String?   @db.VarChar(255)
-  notes       String?   @db.Text
-  birthDate   DateTime?
-  genderId    Int?
+  id              Int       @id @default(autoincrement())
+  personId        Int
+  contactType     String?   @db.VarChar(50)
+  address         String?   @db.Text
+  telephone       String?   @db.VarChar(50)
+  altTelephone    String?   @db.VarChar(50)
+  fax             String?   @db.VarChar(50)
+  email           String?   @db.VarChar(255)
+  notes           String?   @db.Text
+  birthDate       DateTime?
+  genderId        Int?
   maritalStatusId Int?
-  dependents  Int?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  dependents      Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
 
@@ -500,14 +525,14 @@ model Contact {
 }
 
 model Demographic {
-  id            Int       @id @default(autoincrement())
-  personId      Int
-  birthDate     DateTime?
-  genderId      Int?
+  id              Int       @id @default(autoincrement())
+  personId        Int
+  birthDate       DateTime?
+  genderId        Int?
   maritalStatusId Int?
-  dependents    Int?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  dependents      Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
 
@@ -515,13 +540,13 @@ model Demographic {
 }
 
 model PersonId {
-  id        Int       @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   personId  Int
   idTypeId  Int?
-  idNum     String?   @db.VarChar(100)
-  createdAt DateTime  @default(now())
+  idNum     String?  @db.VarChar(100)
+  createdAt DateTime @default(now())
 
-  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  person Person  @relation(fields: [personId], references: [id], onDelete: Cascade)
   idType IdType? @relation(fields: [idTypeId], references: [id])
 
   @@map("person_ids")
@@ -538,15 +563,15 @@ model IdType {
 }
 
 model PersonLanguage {
-  id         Int       @id @default(autoincrement())
+  id         Int      @id @default(autoincrement())
   personId   Int
   languageId Int?
   speaking   Int?
   reading    Int?
   writing    Int?
-  createdAt  DateTime  @default(now())
+  createdAt  DateTime @default(now())
 
-  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  person   Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
   language Language? @relation(fields: [languageId], references: [id])
 
   @@map("person_languages")
@@ -563,15 +588,15 @@ model Language {
 }
 
 model PersonCompetency {
-  id             Int       @id @default(autoincrement())
-  personId       Int
+  id               Int      @id @default(autoincrement())
+  personId         Int
   competencyTypeId Int?
-  competencyId   Int?
-  createdAt      DateTime @default(now())
+  competencyId     Int?
+  createdAt        DateTime @default(now())
 
-  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  person         Person          @relation(fields: [personId], references: [id], onDelete: Cascade)
   competencyType CompetencyType? @relation(fields: [competencyTypeId], references: [id])
-  competency Competency? @relation(fields: [competencyId], references: [id])
+  competency     Competency?     @relation(fields: [competencyId], references: [id])
 
   @@map("person_competencies")
 }
@@ -581,49 +606,49 @@ model CompetencyType {
   name      String   @unique @db.VarChar(100)
   createdAt DateTime @default(now())
 
-  competencies Competency[]
+  competencies       Competency[]
   personCompetencies PersonCompetency[]
 
   @@map("competency_types")
 }
 
 model Competency {
-  id              Int      @id @default(autoincrement())
-  name            String   @unique @db.VarChar(255)
+  id               Int      @id @default(autoincrement())
+  name             String   @unique @db.VarChar(255)
   competencyTypeId Int
-  notes           String?  @db.Text
-  createdAt       DateTime @default(now())
+  notes            String?  @db.Text
+  createdAt        DateTime @default(now())
 
-  competencyType CompetencyType @relation(fields: [competencyTypeId], references: [id])
+  competencyType     CompetencyType     @relation(fields: [competencyTypeId], references: [id])
   personCompetencies PersonCompetency[]
 
   @@map("competencies")
 }
 
 model PersonPosition {
-  id          Int       @id @default(autoincrement())
-  personId    Int
-  positionId  Int
-  startDate   DateTime?
-  endDate     DateTime?
-  reasonId    Int?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id         Int       @id @default(autoincrement())
+  personId   Int
+  positionId Int
+  startDate  DateTime?
+  endDate    DateTime?
+  reasonId   Int?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
-  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
-  position  Position @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  person   Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  position Position @relation(fields: [positionId], references: [id], onDelete: Cascade)
 
   @@unique([personId, positionId, startDate], name: "person_position_unique")
   @@map("person_positions")
 }
 
 model PositionDecision {
-  id        Int       @id @default(autoincrement())
-  positionId Int
+  id           Int      @id @default(autoincrement())
+  positionId   Int
   decisionDate DateTime
-  offer     Int?
-  comments  String?   @db.Text
-  createdAt DateTime  @default(now())
+  offer        Int?
+  comments     String?  @db.Text
+  createdAt    DateTime @default(now())
 
   position Position @relation(fields: [positionId], references: [id], onDelete: Cascade)
 
@@ -631,12 +656,12 @@ model PositionDecision {
 }
 
 model PositionInterview {
-  id          Int       @id @default(autoincrement())
-  positionId  Int
+  id            Int      @id @default(autoincrement())
+  positionId    Int
   interviewDate DateTime
-  person      String?   @db.VarChar(255)
-  comments    String?   @db.Text
-  createdAt   DateTime  @default(now())
+  person        String?  @db.VarChar(255)
+  comments      String?  @db.Text
+  createdAt     DateTime @default(now())
 
   position Position @relation(fields: [positionId], references: [id], onDelete: Cascade)
 
@@ -644,11 +669,11 @@ model PositionInterview {
 }
 
 model Note {
-  id         Int       @id @default(autoincrement())
-  personId   Int
-  note       String?   @db.Text
-  dateAdded  DateTime?
-  createdAt  DateTime  @default(now())
+  id        Int       @id @default(autoincrement())
+  personId  Int
+  note      String?   @db.Text
+  dateAdded DateTime?
+  createdAt DateTime  @default(now())
 
   person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
 
@@ -660,22 +685,22 @@ model Note {
 // ============================================
 
 model Employment {
-  id             Int       @id @default(autoincrement())
-  personId       Int
-  companyName    String?   @db.VarChar(255)
-  companyAddress String?   @db.Text
-  companyPhone   String?   @db.VarChar(50)
-  startDate      DateTime?
-  startWage      Int?
-  startPosition  String?   @db.VarChar(255)
-  endDate        DateTime?
-  endWage        Int?
-  endPosition    String?   @db.VarChar(255)
-  supervisor     String?   @db.VarChar(255)
-  contactOk      Boolean   @default(false)
-  responsibilities String? @db.Text
-  reasonForLeaving String? @db.Text
-  createdAt      DateTime  @default(now())
+  id               Int       @id @default(autoincrement())
+  personId         Int
+  companyName      String?   @db.VarChar(255)
+  companyAddress   String?   @db.Text
+  companyPhone     String?   @db.VarChar(50)
+  startDate        DateTime?
+  startWage        Int?
+  startPosition    String?   @db.VarChar(255)
+  endDate          DateTime?
+  endWage          Int?
+  endPosition      String?   @db.VarChar(255)
+  supervisor       String?   @db.VarChar(255)
+  contactOk        Boolean   @default(false)
+  responsibilities String?   @db.Text
+  reasonForLeaving String?   @db.Text
+  createdAt        DateTime  @default(now())
 
   person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
 
@@ -716,18 +741,18 @@ model Benefit {
 }
 
 model Application {
-  id               Int       @id @default(autoincrement())
-  personId         Int?
-  positionId       Int?
-  felony           Int?
-  felonyCircumstance String? @db.Text
-  otherInfo        String?   @db.Text
-  hear             String?   @db.VarChar(255)
-  startDate        DateTime?
-  desiredWage      String?   @db.VarChar(100)
-  fullTime         Int?
-  hours            String?   @db.VarChar(50)
-  createdAt        DateTime  @default(now())
+  id                 Int       @id @default(autoincrement())
+  personId           Int?
+  positionId         Int?
+  felony             Int?
+  felonyCircumstance String?   @db.Text
+  otherInfo          String?   @db.Text
+  hear               String?   @db.VarChar(255)
+  startDate          DateTime?
+  desiredWage        String?   @db.VarChar(100)
+  fullTime           Int?
+  hours              String?   @db.VarChar(50)
+  createdAt          DateTime  @default(now())
 
   person Person? @relation(fields: [personId], references: [id])
 
@@ -739,23 +764,27 @@ model Application {
 // ============================================
 
 model TrainingCourse {
-  id                 Int       @id @default(autoincrement())
-  name               String    @db.VarChar(255)
-  topic              String?   @db.Text
-  notes              String?   @db.Text
-  trainingInstitutionId Int?
-  trainingFunder     String?   @db.VarChar(255)
-  continuingEducationCourse String? @db.VarChar(255)
-  trainingCourseStatusId Int?
-  trainingCourseCategoryId Int?
-  competency         String?   @db.VarChar(255)
-  createdAt          DateTime  @default(now())
+  id                        Int       @id @default(autoincrement())
+  name                      String    @db.VarChar(255)
+  topic                     String?   @db.Text
+  notes                     String?   @db.Text
+  trainingInstitutionId     Int?
+  trainingFunder            String?   @db.VarChar(255)
+  continuingEducationCourse String?   @db.VarChar(255)
+  trainingCourseStatusId    Int?
+  trainingCourseCategoryId  Int?
+  competency                String?   @db.VarChar(255)
+  // ADR-009: قفل تفاؤلي + حذف ناعم للدورات (لأن لها دورات مجدولة/متدربين)
+  version                   Int       @default(1)
+  deletedAt                 DateTime?
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
 
-  trainingInstitution TrainingInstitution? @relation(fields: [trainingInstitutionId], references: [id])
-  trainingCourseStatus TrainingCourseStatus? @relation(fields: [trainingCourseStatusId], references: [id])
+  trainingInstitution    TrainingInstitution?    @relation(fields: [trainingInstitutionId], references: [id])
+  trainingCourseStatus   TrainingCourseStatus?   @relation(fields: [trainingCourseStatusId], references: [id])
   trainingCourseCategory TrainingCourseCategory? @relation(fields: [trainingCourseCategoryId], references: [id])
 
-  scheduledCourses   ScheduledTrainingCourse[]
+  scheduledCourses ScheduledTrainingCourse[]
 
   @@map("training_courses")
 }
@@ -763,7 +792,10 @@ model TrainingCourse {
 model TrainingInstitution {
   id        Int      @id @default(autoincrement())
   name      String   @unique @db.VarChar(255)
+  // ADR-009: حذف فيزيائي + قفل تفاؤلي
+  version   Int      @default(1)
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   trainingCourses TrainingCourse[]
 
@@ -791,39 +823,43 @@ model TrainingCourseCategory {
 }
 
 model ScheduledTrainingCourse {
-  id              Int       @id @default(autoincrement())
+  id               Int       @id @default(autoincrement())
   trainingCourseId Int
-  site            String?   @db.VarChar(255)
-  numStudents     Int?
-  notes           String?   @db.Text
-  instructors     String?   @db.VarChar(255)
-  startDate       DateTime?
-  endDate         DateTime?
-  countryId       Int?
-  districtId      Int?
-  countyId        Int?
-  createdAt       DateTime  @default(now())
+  site             String?   @db.VarChar(255)
+  numStudents      Int?
+  notes            String?   @db.Text
+  instructors      String?   @db.VarChar(255)
+  startDate        DateTime?
+  endDate          DateTime?
+  countryId        Int?
+  districtId       Int?
+  countyId         Int?
+  // ADR-009 §9.4: حالة سير عمل مشتقة من BR-075..078 (planning|scheduled|completed|cancelled)
+  status           String    @default("scheduled") @db.VarChar(20)
+  version          Int       @default(1)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  trainingCourse TrainingCourse @relation(fields: [trainingCourseId], references: [id], onDelete: Cascade)
+  trainingCourse  TrainingCourse            @relation(fields: [trainingCourseId], references: [id], onDelete: Cascade)
   personScheduled PersonScheduledTraining[]
 
   @@map("scheduled_training_courses")
 }
 
 model PersonScheduledTraining {
-  id                      Int       @id @default(autoincrement())
-  personId                Int
-  scheduledTrainingCourseId Int
-  isRetraining            Boolean   @default(false)
-  completed               Boolean   @default(false)
-  requestDate             DateTime?
-  notes                   String?   @db.Text
+  id                         Int       @id @default(autoincrement())
+  personId                   Int
+  scheduledTrainingCourseId  Int
+  isRetraining               Boolean   @default(false)
+  completed                  Boolean   @default(false)
+  requestDate                DateTime?
+  notes                      String?   @db.Text
   trainingCourseEvaluationId Int?
-  trainingCourseRequestorId Int?
-  trainingCourseId        Int?
-  createdAt               DateTime  @default(now())
+  trainingCourseRequestorId  Int?
+  trainingCourseId           Int?
+  createdAt                  DateTime  @default(now())
 
-  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  person                  Person                  @relation(fields: [personId], references: [id], onDelete: Cascade)
   scheduledTrainingCourse ScheduledTrainingCourse @relation(fields: [scheduledTrainingCourseId], references: [id], onDelete: Cascade)
 
   @@map("person_scheduled_training_courses")
@@ -834,19 +870,19 @@ model PersonScheduledTraining {
 // ============================================
 
 model Form {
-  id   Int     @id @default(autoincrement())
-  name String  @unique @db.VarChar(50)
-  type Int     @default(0)
-  fields FormField[]
+  id      Int         @id @default(autoincrement())
+  name    String      @unique @db.VarChar(50)
+  type    Int         @default(0)
+  fields  FormField[]
   records Record[]
 
   @@map("forms")
 }
 
 model Field {
-  id   Int     @id @default(autoincrement())
-  name String  @db.VarChar(50)
-  type String @db.VarChar(16)
+  id         Int         @id @default(autoincrement())
+  name       String      @db.VarChar(50)
+  type       String      @db.VarChar(16)
   formFields FormField[]
 
   @@unique([name, type])
@@ -854,12 +890,12 @@ model Field {
 }
 
 model FormField {
-  id        Int   @id @default(autoincrement())
-  formId    Int
-  fieldId   Int
-  form      Form   @relation(fields: [formId], references: [id], onDelete: Cascade)
-  field     Field  @relation(fields: [fieldId], references: [id], onDelete: Cascade)
-  entries   Entry[]
+  id          Int         @id @default(autoincrement())
+  formId      Int
+  fieldId     Int
+  form        Form        @relation(fields: [formId], references: [id], onDelete: Cascade)
+  field       Field       @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  entries     Entry[]
   lastEntries LastEntry[]
 
   @@unique([formId, fieldId])
@@ -867,35 +903,35 @@ model FormField {
 }
 
 model Record {
-  id            Int      @id @default(autoincrement())
-  lastModified  DateTime @default(now())
-  formId        Int
-  parentId      Int?
-  entries       Entry[]
+  id           Int      @id @default(autoincrement())
+  lastModified DateTime @default(now())
+  formId       Int
+  parentId     Int?
+  entries      Entry[]
 
-  form   Form   @relation(fields: [formId], references: [id])
-  parent Record? @relation("RecordParent", fields: [parentId], references: [id])
-  child  Record[] @relation("RecordParent")
+  form        Form        @relation(fields: [formId], references: [id])
+  parent      Record?     @relation("RecordParent", fields: [parentId], references: [id])
+  child       Record[]    @relation("RecordParent")
   lastEntries LastEntry[]
 
   @@map("records")
 }
 
 model Entry {
-  id            Int      @id @default(autoincrement())
-  recordId      Int
-  formFieldId   Int
-  date          DateTime @default(now())
-  who           Int
-  changeType    Int      @default(1)
-  multiple      Int      @default(0)
-  stringValue   String?  @db.VarChar(255)
-  integerValue  Int?
-  textValue     String?  @db.Text
-  dateValue     DateTime?
-  blobValue     Bytes?
+  id           Int       @id @default(autoincrement())
+  recordId     Int
+  formFieldId  Int
+  date         DateTime  @default(now())
+  who          Int
+  changeType   Int       @default(1)
+  multiple     Int       @default(0)
+  stringValue  String?   @db.VarChar(255)
+  integerValue Int?
+  textValue    String?   @db.Text
+  dateValue    DateTime?
+  blobValue    Bytes?
 
-  record   Record   @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  record    Record    @relation(fields: [recordId], references: [id], onDelete: Cascade)
   formField FormField @relation(fields: [formFieldId], references: [id])
 
   @@index([recordId])
@@ -904,19 +940,19 @@ model Entry {
 }
 
 model LastEntry {
-  recordId    Int
-  formFieldId Int
-  date        DateTime
-  who         Int
-  changeType  Int
-  multiple    Int
-  stringValue String?  @db.VarChar(255)
+  recordId     Int
+  formFieldId  Int
+  date         DateTime
+  who          Int
+  changeType   Int
+  multiple     Int
+  stringValue  String?   @db.VarChar(255)
   integerValue Int?
-  textValue   String?  @db.Text
-  dateValue   DateTime?
-  blobValue   Bytes?
+  textValue    String?   @db.Text
+  dateValue    DateTime?
+  blobValue    Bytes?
 
-  record   Record   @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  record    Record    @relation(fields: [recordId], references: [id], onDelete: Cascade)
   formField FormField @relation(fields: [formFieldId], references: [id])
 
   @@id([recordId, formFieldId])
@@ -953,12 +989,12 @@ model Config {
 // ============================================
 
 model Report {
-  id        Int      @id @default(autoincrement())
-  name      String   @db.VarChar(255)
-  type      String   @db.VarChar(50)
-  report    String   @db.VarChar(50)
-  cached    DateTime
-  status    Boolean  @default(false)
+  id     Int      @id @default(autoincrement())
+  name   String   @db.VarChar(255)
+  type   String   @db.VarChar(50)
+  report String   @db.VarChar(50)
+  cached DateTime
+  status Boolean  @default(false)
 
   @@unique([type, report])
   @@map("reports")
@@ -969,15 +1005,15 @@ model Report {
 // ============================================
 
 model ReportDefinition {
-  id            Int      @id @default(autoincrement())
-  name          String   @db.VarChar(255)
-  description   String?  @db.Text
-  type          String   @db.VarChar(50) @default("list")
-  definition    Json
-  isEnabled     Boolean  @default(true)
-  createdBy     Int
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id          Int      @id @default(autoincrement())
+  name        String   @db.VarChar(255)
+  description String?  @db.Text
+  type        String   @default("list") @db.VarChar(50)
+  definition  Json
+  isEnabled   Boolean  @default(true)
+  createdBy   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   createdByUser User               @relation("ReportDefinitionCreator", fields: [createdBy], references: [id])
   executions    ReportExecution[]
@@ -994,16 +1030,16 @@ model ReportDefinition {
 // ============================================
 
 model ReportExecution {
-  id              Int      @id @default(autoincrement())
+  id                 Int       @id @default(autoincrement())
   reportDefinitionId Int
-  executedBy      Int
-  status          String   @db.VarChar(50) @default("pending") // pending, running, completed, failed
-  result          Json?
-  errorMessage    String?  @db.Text
-  startedAt       DateTime @default(now())
-  completedAt     DateTime?
-  rowCount        Int      @default(0)
-  executionTimeMs Int?
+  executedBy         Int
+  status             String    @default("pending") @db.VarChar(50) // pending, running, completed, failed
+  result             Json?
+  errorMessage       String?   @db.Text
+  startedAt          DateTime  @default(now())
+  completedAt        DateTime?
+  rowCount           Int       @default(0)
+  executionTimeMs    Int?
 
   reportDefinition ReportDefinition @relation(fields: [reportDefinitionId], references: [id], onDelete: Cascade)
   executedByUser   User             @relation("ReportExecutionRunner", fields: [executedBy], references: [id])
@@ -1020,16 +1056,16 @@ model ReportExecution {
 // ============================================
 
 model ReportPreference {
-  id                Int      @id @default(autoincrement())
-  userId            Int
+  id                 Int      @id @default(autoincrement())
+  userId             Int
   reportDefinitionId Int
-  isFavorite        Boolean  @default(false)
-  customSettings    Json     @default("{}")
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  isFavorite         Boolean  @default(false)
+  customSettings     Json     @default("{}")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  user              User             @relation("ReportPreferenceUser", fields: [userId], references: [id], onDelete: Cascade)
-  reportDefinition  ReportDefinition @relation(fields: [reportDefinitionId], references: [id], onDelete: Cascade)
+  user             User             @relation("ReportPreferenceUser", fields: [userId], references: [id], onDelete: Cascade)
+  reportDefinition ReportDefinition @relation(fields: [reportDefinitionId], references: [id], onDelete: Cascade)
 
   @@unique([userId, reportDefinitionId])
   @@map("report_preferences")

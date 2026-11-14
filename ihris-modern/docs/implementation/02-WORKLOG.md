@@ -266,4 +266,43 @@ GAP-FE-010/011/012 + GAP-M-004/012/013/014/015 **مغلقة**. التقدم **21
 BLK-011 **مغلق** (26 صفاً مرجعياً + CRUD + E2E). BLK-006 بنده السابع مُحدَّث.
 Seed موثّق صفاً بصف بمستويات FACT/DERIVED (ESTIMATE = 0).
 
+## يوم Sprint 6 — 14 نوفمبر 2026
+
+### وحدة التدريب + Polish
+
+| الوقت | المهمة | التفاصيل | الحالة |
+|-------|--------|---------|---------|
+| 08:30 | استخراج بيانات التدريب من `DB export.sql` | 16 صفاً FACT (3+2+5+3+3) + صفّا تسجيل مؤجّلان | ✅ |
+| 08:50 | تحليل GAP-H-001/002 + GAP-FE-007/008/009 | `gaps/GAP-*/analysis.md` | ✅ |
+| 09:10 | ADR-009 (10 قرارات) | `04-DECISIONS.md` §9 | ✅ |
+| 09:30 | ترحيل 011 (training schema) + rollback | `version`/`deletedAt`/`status` + فهارس | ✅ |
+| 09:50 | ترحيل 012 (audit) + rollback | `training_audit_log` موحّد + 3 فهارس | ✅ |
+| 10:10 | ترحيل 013 (`positions.sourceId` FK) + rollback | `ON DELETE RESTRICT` + ترحيل رقمي آمن | ✅ |
+| 10:30 | ترحيل 014 (Seed تدريب) + rollback | 16 صفاً + `setval` + `EXISTS` للتسجيل | ✅ |
+| 10:50 | اختبار round-trip للترحيلات 014→011 | rollback ثم إعادة تطبيق — counts 3/2/5/3/3/0 | ✅ |
+| 11:10 | Prisma schema + `prisma generate` | 4 نماذج معدّلة + `TrainingAuditLog` + `sourceId` | ✅ |
+| 11:40 | `training.validation.ts` | 8 مخططات Zod `.strict()` | ✅ |
+| 12:20 | `training.service.ts` | CRUD + تسجيل + audit + 409/422 + آلة حالة | ✅ |
+| 13:00 | `training.controller.ts` + `routes/training.ts` | 17 نقطة نهاية + RBAC (3 أدوار كتابة) | ✅ |
+| 13:20 | `referenceData.service.ts` + `position.service.ts` | عدّ `sourceId` + دعم الحقل | ✅ |
+| 13:40 | `Training.tsx` + `TrainingForm.tsx` | قائمة/بطاقات/حذف 422 + نموذج موحّد | ✅ |
+| 14:20 | `TrainingInstitutions.tsx` | CRUD + حذف مع 422 | ✅ |
+| 14:50 | `ScheduledCourseForm.tsx` | إنشاء/تعديل + آلة حالة + version | ✅ |
+| 15:20 | `EnrolledStudents.tsx` | قائمة/تسجيل/إتمام/حذف + بحث أشخاص | ✅ |
+| 15:40 | `App.tsx` + `MainLayout.tsx` + `errorDetails.ts` | 7 مسارات + تجميع مرجعي + عرض 422 | ✅ |
+| 16:00 | `tsc --noEmit` | backend ✅ / frontend ✅ | ✅ |
+| 16:20 | `training.test.ts` | 17 سيناريو قبول | ✅ |
+| 16:40 | `training.security.test.ts` | 10/10 أمان | ✅ |
+| 17:00 | `training.validation.test.ts` | 6/6 وحدة | ✅ |
+| 17:20 | `MainLayout.test.tsx` | 4/4 (سيناريو التنقّل 18) | ✅ |
+| 17:50 | Regression كامل | 227 backend + 7 frontend | ✅ |
+| 18:20 | إغلاق الوثائق | DASHBOARD 26/48 + REGISTRY + BLOCKERS + seeds/README | ✅ |
+
+### الخلاصة
+
+GAP-FE-007/008/009 + GAP-H-001/002 **مغلقة**. التقدم **26/48 = 54.17%**.
+BLK-012 **مغلق** (وحدة التدريب end-to-end). `positions.source` → FK (tech debt مُغلق).
+Seed التدريب 16 صفاً FACT (ESTIMATE = 0)؛ صفّا التسجيل مؤجّلان بشرط `EXISTS`.
+لا push؛ الفرع `feature/sprint-6-training`.
+
 

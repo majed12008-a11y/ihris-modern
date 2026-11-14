@@ -135,6 +135,25 @@
 | EVID-T-049 | Seed idempotent | psql على `ihris_test_gap001` | FACT | 26 صفاً؛ الإعادة `INSERT 0 0` | مؤكدة |
 | EVID-T-050 | `ihris_manage` بعد Sprint 5 | psql على `ihris_manage` | FACT | 0 أعمدة/جداول جديدة | مؤكدة |
 | EVID-T-051 | تفاصيل الوظيفة تعيد المناصب | `GET /api/jobs/:id` | FACT | `positions[]` + `posType`/`status`/`facility` | مؤكدة |
+| EVID-248 | ADR-009 (10 قرارات) | `04-DECISIONS.md` §9 | FACT | تدريب/Seed/حذف/FK/أدوار/تنقّل | مؤكدة |
+| EVID-249 | ترحيل 011 (training schema) | `migrations/pending/011_training_schema.sql` | FACT | `version`/`deletedAt`/`status` + فهارس | مؤكدة |
+| EVID-250 | ترحيل 012 (audit) | `migrations/pending/012_training_audit.sql` | FACT | `training_audit_log` + 3 فهارس | مؤكدة |
+| EVID-251 | ترحيل 013 (`positions.sourceId`) | `migrations/pending/013_positions_source_fk.sql` | FACT | FK + `ON DELETE RESTRICT` + فهرس | مؤكدة |
+| EVID-252 | ترحيل 014 (Seed تدريب) | `migrations/pending/014_seed_training.sql` | FACT | 16 صفاً + `EXISTS` + `setval` | مؤكدة |
+| EVID-253 | خدمة التدريب | `backend/src/services/training.service.ts` | FACT | CRUD + تسجيل + audit + 409/422 | مؤكدة |
+| EVID-254 | تحقق Zod للتدريب | `backend/src/services/training.validation.ts` | FACT | 8 مخططات `.strict()` | مؤكدة |
+| EVID-255 | متحكم/مسارات التدريب | `training.controller.ts` + `routes/training.ts` | FACT | 17 نقطة نهاية + RBAC | مؤكدة |
+| EVID-256 | واجهة الدورات والمؤسسات | `Training.tsx`/`TrainingForm.tsx`/`TrainingInstitutions.tsx` | FACT | قائمة/CRUD/حذف 422 | مؤكدة |
+| EVID-257 | واجهة الجدولة والمتدربين | `ScheduledCourseForm.tsx` + `EnrolledStudents.tsx` | FACT | آلة حالة + تسجيل/إتمام | مؤكدة |
+| EVID-258 | تجميع التنقّل + عرض 422 | `MainLayout.tsx` + `lib/errorDetails.ts` | FACT | مجموعة قابلة للطي + تفاصيل | مؤكدة |
+| EVID-T-052 | قبول التدريب (17) | `training.test.ts` | FACT | 17/17 | مؤكدة |
+| EVID-T-053 | أمان التدريب (10) | `training.security.test.ts` | FACT | 10/10 | مؤكدة |
+| EVID-T-054 | وحدة Zod للتدريب (6) | `training.validation.test.ts` | FACT | 6/6 | مؤكدة |
+| EVID-T-055 | تجميع التنقّل | `MainLayout.test.tsx` | FACT | 4/4 (سيناريو 18) | مؤكدة |
+| EVID-T-056 | Regression نهائي (Sprint 6) | backend + frontend | FACT | 227/227 + 7/7 | مؤكدة |
+| EVID-T-057 | ترحيلات 011–014 | psql على `ihris_test_gap001` | FACT | apply/reapply/rollback/reapply | مؤكدة |
+| EVID-T-058 | Seed تدريب idempotent | psql على `ihris_test_gap001` | FACT | 3/2/5/3/3/0؛ الإعادة بلا تكرار | مؤكدة |
+| EVID-T-059 | `ihris_manage` بعد Sprint 6 | psql على `ihris_manage` | FACT | 0 أعمدة/جداول جديدة | مؤكدة |
 
 ---
 
@@ -142,16 +161,17 @@
 
 | النوع | العدد | النسبة المئوية |
 |------|-------|-------------|
-| FACT (حقيقة مثبتة) | 116 | 100% |
+| FACT (حقيقة مثبتة) | 135 | 100% |
 | INFERENCE (استنتاج) | 0 | 0% |
 | ASSUMPTION (افتراض) | 0 | 0% |
 | UNKNOWN (غير معروفة) | 0 | 0% |
-| **الإجمالي** | **116 دليل** | **100%** |
+| **الإجمالي** | **135 دليل** | **100%** |
 
 > تصحيح Sprint 1.5b/1.5c: لم يبقَ أي دليل اختبار UNKNOWN أو INFERENCE؛ كلها نُفِّذت فعلياً.
 > Sprint 2.5 وSprint 3 أضافا 17 دليلاً جديداً (EVID-215..231 + EVID-T-023..032).
 > Sprint 4 أضاف 8 أدلة (EVID-T-033..040).
 > Sprint 5 أضاف 27 دليلاً (EVID-232..247 + EVID-T-041..051).
+> Sprint 6 أضاف 19 دليلاً (EVID-248..258 + EVID-T-052..059) → 135 دليلاً.
 > تصحيح عدّ: 49 دليلاً في §2 + 40 في §3 قبل Sprint 5 = 89 (كان الملخص يذكر 79 خطأً).
 
 ---
@@ -166,8 +186,9 @@
 | عدد الأدلة لـ GAP-004/005/006 | 8 أدلة |
 | عدد الأدلة لـ GAP-M-005..010 (Sprint 4) | 8 أدلة |
 | عدد الأدلة لـ Sprint 5 (المرجعية + Seed + JobDetail) | 27 دليلاً |
-| عدد الأدلة من النوع FACT | 116 دليل |
+| عدد الأدلة لـ Sprint 6 (التدريب + Polish + tech debt) | 19 دليلاً |
+| عدد الأدلة من النوع FACT | 135 دليل |
 | نسبة الأدلة المؤكدة | 100% |
 | قاعدة الاختبار | `ihris_test_gap001` |
 | سجل الترحيل | `migrations/applied/README.md` |
-| التقدم | 21/48 = 43.75% |
+| التقدم | 26/48 = 54.17% |

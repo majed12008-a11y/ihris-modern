@@ -711,3 +711,72 @@ Sprint 4 أغلق CRUD الدول والمسميات الوظيفية، لكن `
 - Regression: 139 + الجديد = الإجمالي.
 - الترحيلات 008/009/010: idempotent + rollback مُختبَر.
 - `ihris_manage` لم تُمسّ؛ الـSeed على `ihris_test_gap001` فقط.
+
+---
+
+## ADR-009: تصميم وحدة التدريب — Sprint 6
+
+### 9.1 السياق
+
+وحدة التدريب موجودة في Prisma منذ الترحيل الأول (6 نماذج + علاقات Cascade)، لكن
+الـAPI يقتصر على قراءة/إنشاء الدورات والمؤسسات، والواجهة للقراءة فقط مع زر وهمي.
+البيانات الفعلية في `DB export.sql` كافية لـSeed حقيقي (16 صفاً)، و`positions.source`
+لا يزال نصاً حراً رغم وجود `salary_sources` منذ ADR-008.
+
+### 9.2 القرارات (10)
+
+| # | البند | القرار |
+|---|-------|--------|
+| 1 | نمط التنفيذ | توسيع ADR-007/008: خدمة + تحقق Zod صارم + قفل تفاؤلي + Audit |
+| 2 | Soft أم Hard delete؟ | **Soft** للدورات (`deletedAt`، لأن لها دورات مجدولة/متدربين)، **Hard** للمؤسسات مع عدّ المراجع |
+| 3 | Audit | **جدول موحّد** `training_audit_log` (`entityType` + `entityId` + `action`) |
+| 4 | Version field | `version` على `training_courses` و`scheduled_training_courses`؛ `updateMany({id,version})` → 409 |
+| 5 | Seed | من `DB export.sql` فقط (FACT). 16 صفاً في الجداول الحديثة + صفّا تسجيل مؤجّلان بشرط `EXISTS` |
+| 6 | Cascade | `TrainingCourse → ScheduledTrainingCourse → PersonScheduledTraining` (CASCADE في القاعدة والتطبيق) |
+| 7 | Enrollment workflow | `POST enroll` → `completed=false`؛ `PUT enrollment` → إتمام؛ منع التسجيل بعد `completed` → 422 |
+| 8 | `positions.source` FK | Migration 013: `sourceId INTEGER REFERENCES salary_sources(id) ON DELETE RESTRICT` مع إبقاء `source` النصي للتوافق |
+| 9 | الأدوار | `admin` + `hr_manager` + `training_manager`: CRUD؛ `hr_staff`: قراءة فقط |
+| 10 | Navigation grouping | تجميع 5 عناصر مرجعية تحت قائمة قابلة للطي «البيانات المرجعية» |
+
+### 9.3 تفاصيل الـSeed (FACT)
+
+| الجدول | الصفوف | المصدر (DB export.sql) | الثقة |
+|--------|--------|------------------------|-------|
+| `training_institutions` | 3 | 56713–56716 | FACT |
+| `training_course_statuses` | 2 | 56662–56664 | FACT |
+| `training_course_categories` | 5 | 56559–56564 | FACT |
+| `training_courses` | 3 | 56535–56538 | FACT |
+| `scheduled_training_courses` | 3 | 56484–56487 | FACT |
+| `person_scheduled_training_courses` | 2 (مؤجّلان) | 54205–54207 | FACT مشروط |
+| **الإجمالي المُطبَّق** | **16** | — | — |
+
+- الأسماء إنجليزية حرفياً كما في القديم.
+- تُحفظ المعرّفات القديمة صريحة (15401، 15375…) لتبقى العلاقات صحيحة؛ ثم `setval` للـsequences.
+- `countryId`/`districtId` تُحفظ كأرقام قديمة (9/41/55) لأن النموذج بلا FK للأقاليم؛
+  تُوثَّق كبيانات قديمة إلى حين ترحيل الجغرافيا.
+- صفّا التسجيل يُدرجان فقط إذا وُجد الشخصان 10341/15385 (غير موجودين حالياً في `people`).
+- الـSeed في migration منفصل (014) ولا يُطبَّق على الإنتاج.
+
+### 9.4 حالة السير العمل
+
+جدول `training_course_statuses` الفعلي يحوي `Open`/`Closed` فقط. لذلك:
+- تبقى الحالات المرجعية FACT كما هي.
+- تُضاف `scheduled_training_courses.status VARCHAR(20) DEFAULT 'scheduled'`
+  بالقيم `planning|scheduled|completed|cancelled` (DERIVED من BR-075..078 وBR-088).
+- قبول السيناريو 12 يعدّل `status` من `scheduled` إلى `completed` مع `version + 1`.
+
+### 9.5 الحماية من الحذف
+
+| الكيان | الفحص | النتيجة |
+|--------|-------|---------|
+| مؤسسة تدريبية | `training_courses.trainingInstitutionId` (بما فيها المحذوفة ناعماً؟ لا — النشطة فقط) | 422 |
+| دورة تدريبية | `scheduled_training_courses` النشطة | 422 |
+| دورة مجدولة | `person_scheduled_training_courses` | 422 |
+| `salary_sources` | `positions.sourceId` (بعد 013) | 422 |
+
+### 9.6 بوابة Sprint 6
+
+- 18/18 قبول + 10/10 أمان + وحدة.
+- Regression: 194 + الجديد ≈ 230.
+- الترحيلات 011–014: idempotent + rollback لكل منها مُختبَر.
+- `ihris_manage` لم تُمسّ؛ لا push.

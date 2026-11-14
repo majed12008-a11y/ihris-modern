@@ -1,7 +1,10 @@
-# توثيق بيانات الـSeed المرجعية — Sprint 5 (ADR-008 §8.3)
+# توثيق بيانات الـSeed المرجعية — Sprint 5 + Sprint 6
 
-> الملف المرتبط: `migrations/pending/010_seed_reference_data.sql`
-> التراجع: `migrations/rollback/010_seed_reference_data_rollback.sql`
+> الملفات المرتبطة:
+> - `migrations/pending/010_seed_reference_data.sql` (Sprint 5 — مراجع، 26 صفاً)
+> - `migrations/pending/014_seed_training.sql` (Sprint 6 — تدريب، 16 صفاً)
+>
+> التراجع: `migrations/rollback/010_*_rollback.sql` و`migrations/rollback/014_*_rollback.sql`
 > المصدر الوحيد: `DB export.sql` — قاعدة **`ihris_manage`** (السطور 1–100,054).
 
 ## مستويات الثقة
@@ -103,8 +106,49 @@
 | 6 | Ministry of Health | `SRC-MOH` | وزارة الصحة | FACT / DERIVED |
 | 7 | Private | `SRC-PRIV` | قطاع خاص | FACT / DERIVED |
 
-> `salary_sources` جدول **جديد** في المخطط الحديث (لم يكن موجوداً). لا FK له مع
-> `positions.source` (نص حر في القديم والحديث) — انظر ADR-008 §8.5.
+> `salary_sources` جدول **جديد** في المخطط الحديث (لم يكن موجوداً). منذ Sprint 6
+> يرتبط به `positions.sourceId` (FK، migration 013، `ON DELETE RESTRICT`)؛
+> يبقى العمود النصي `positions.source` للتوافق مع البيانات القديمة.
+
+---
+
+## 6. Seed التدريب — 16 صفاً (Sprint 6 — migration 014)
+
+المصدر: `DB export.sql` قسم `ihris_manage` (السطور 54186–56716).
+التفاصيل الكاملة في `gaps/GAP-H-001/analysis.md` §2.
+
+| الجدول | الصفوف | المصدر | الثقة |
+|--------|--------|--------|-------|
+| `training_institutions` | 3 | 56713–56716 | FACT |
+| `training_course_statuses` | 2 | 56662–56664 | FACT |
+| `training_course_categories` | 5 | 56559–56564 | FACT |
+| `training_courses` | 3 | 56535–56538 | FACT |
+| `scheduled_training_courses` | 3 | 56484–56487 | FACT (الحالة `scheduled` = DERIVED) |
+| `person_scheduled_training_courses` | 2 (مؤجّلان) | 54205–54207 | FACT مشروط |
+| **الإجمالي المُطبَّق** | **16** | — | — |
+
+### الأسماء الأصلية (FACT)
+
+- **المؤسسات:** Baisl School، Caecheaje School، Caifrael School.
+- **الحالات:** Open، Closed.
+- **التصنيفات:** HIV/AIDS، Maternal Health، Infection Control، Neonatal Care، Laboratory.
+- **الدورات:** HIV/AIDS Counseling، HIV/AIDS Patient Counseling، Postnatal Care for Nurses.
+- **الدورات المجدولة:** Capital City University (×2)، Baisl School (×1).
+
+### قواعد إضافية خاصة بالتدريب
+
+1. المعرّفات القديمة محفوظة صريحة (15401، 15375، 15377…) لتبقى العلاقات صحيحة،
+   ثم `setval` لكل sequence بعد الإدراج.
+2. `scheduled_training_courses.status` عمود جديد؛ القيمة `'scheduled'` **DERIVED**
+   من وثائق القديم (BR-075..078) لأن القديم لا يخزّن حالة على مستوى الدورة المجدولة.
+3. `countryId`/`districtId` (9/41/55) محفوظة كأرقام قديمة — لا FK للجغرافيا في النموذج.
+4. صفّا التسجيل `15384`/`15393` يشيران إلى الشخصين `10341`/`15385` غير الموجودين
+   في `people` الحديثة (0 صف)، لذا يُدرجان فقط داخل `SELECT ... WHERE EXISTS`.
+   في قاعدة الاختبار لم يُدرجا → `person_scheduled_training_courses = 0`.
+5. لا `UPDATE` لأي صف موجود؛ `ON CONFLICT (id) DO NOTHING`.
+6. الـRollback يحذف بالمعرّفات القديمة فقط (لا `TRUNCATE`).
+
+> **لا صفوف ESTIMATE** في التدريب أيضاً: كل اسم/تاريخ/رقم منقول حرفياً.
 
 ---
 
@@ -117,7 +161,16 @@
 | `classifications` | 6 | 6 | 1 (`PHA`)؛ 5 أصلية | 0 |
 | `position_types` | 4 | 4 | 4 | 0 |
 | `salary_sources` | 7 | 7 | 7 | 0 |
-| **المجموع** | **26** | **26** | **21** | **0** |
+| `training_institutions` | 3 | 3 | 0 | 0 |
+| `training_course_statuses` | 2 | 2 | 0 | 0 |
+| `training_course_categories` | 5 | 5 | 0 | 0 |
+| `training_courses` | 3 | 3 | 0 | 0 |
+| `scheduled_training_courses` | 3 | 3 | 3 (status) | 0 |
+| `person_scheduled_training_courses` | 0 (مؤجّل) | 0 | 0 | 0 |
+| **المجموع** | **42** | **42** | **24** | **0** |
+
+> Sprint 5: 26 صفاً مرجعياً. Sprint 6: 16 صفاً تدريبياً. الإجمالي المطبَّق = **42 صفاً**،
+> كلها `FACT` (مع `DERIVED` للأكواد والحالة فقط)، و`ESTIMATE = 0`.
 
 > الأكواد الأصلية في `classifications` (222/223/322/241/411) ليست مشتقة — 5 صفوف.
 > لذلك مجموع الأكواد المشتقة = 26 − 5 = 21 بند `DERIVED`.
@@ -133,6 +186,14 @@ SELECT (SELECT count(*) FROM salary_grades)   AS sg,
        (SELECT count(*) FROM position_types)  AS pt,
        (SELECT count(*) FROM salary_sources)  AS ss;
 -- المتوقع: 5 | 4 | 6 | 4 | 7
+
+SELECT (SELECT count(*) FROM training_institutions)              AS inst,
+       (SELECT count(*) FROM training_course_statuses)           AS statuses,
+       (SELECT count(*) FROM training_course_categories)         AS categories,
+       (SELECT count(*) FROM training_courses)                   AS courses,
+       (SELECT count(*) FROM scheduled_training_courses)         AS scheduled,
+       (SELECT count(*) FROM person_scheduled_training_courses)  AS enrollments;
+-- المتوقع: 3 | 2 | 5 | 3 | 3 | 0
 ```
 
 إعادة التطبيق تُنتج `INSERT 0 0` لكل جدول (idempotent).

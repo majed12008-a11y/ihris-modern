@@ -1,5 +1,37 @@
 # سجل التغييرات (Changelog)
 
+## [0.9.0] - 14 نوفمبر 2026 — Sprint 6 (وحدة التدريب + Polish)
+
+### أُضيف
+- **GAP-007 / GAP-FE-007**: ✅ تعديل دورة تدريبية — نموذج موحّد للإنشاء/التعديل + قفل تفاؤلي (409).
+- **GAP-FE-008**: ✅ حذف دورة تدريبية (حذف ناعم) + منع الحذف عند وجود دورات مجدولة (422).
+- **GAP-FE-009**: ✅ إدارة المؤسسات التدريبية (CRUD كامل) + منع حذف مؤسسة مرتبطة (422).
+- **GAP-H-001**: ✅ إضافة/تعديل دورة مجدولة + آلة حالة `planning|scheduled|completed|cancelled`.
+- **GAP-H-002**: ✅ عرض المتدربين + تسجيل/إتمام/حذف التسجيلات.
+- **Training Audit**: ✅ `training_audit_log` موحّد (create/update/delete + old/new JSONB).
+- **Tech debt**: ✅ `positions.sourceId` FK → `salary_sources(id)` مع `ON DELETE RESTRICT`.
+- **Seed التدريب**: ✅ 16 صفاً واقعياً من `DB export.sql` (FACT) في migration منفصل.
+- **Polish**: عرض تفاصيل 422 (`lib/errorDetails.ts`) + تجميع عناصر البيانات المرجعية الخمسة في قائمة قابلة للطي.
+
+### تغييرات
+- ترحيل `011_training_schema.sql` — `version`/`deletedAt` للدورات، `status`/`version` للدورات المجدولة، فهارس.
+- ترحيل `012_training_audit.sql` — جدول تدقيق موحّد + 3 فهارس.
+- ترحيل `013_positions_source_fk.sql` — `sourceId` + FK + فهرس + ترحيل رقمي آمن.
+- ترحيل `014_seed_training.sql` — 16 صفاً + صفّا تسجيل مشروطان بـ`EXISTS` + `setval`.
+- ADR-009 (10 قرارات) في `04-DECISIONS.md` §9.
+- `training.validation.ts` (Zod `.strict()`) + `training.service.ts` + `training.controller.ts` + `routes/training.ts`.
+- `Training.tsx` أُعيد بناؤه (قائمة/بطاقات/حذف/جدولة/متدربون) + `TrainingForm.tsx` + `TrainingInstitutions.tsx` + `ScheduledCourseForm.tsx` + `EnrolledStudents.tsx`.
+- `MainLayout.tsx` — 5 عناصر مرجعية داخل مجموعة قابلة للطي «البيانات المرجعية».
+- `referenceData.service.ts` — عدّ `positions.sourceId` عند حذف مصدر راتب.
+- `position.service.ts` — دعم `sourceId` في الإنشاء والتعديل.
+
+### الأرقام
+- Backend: **227/227** (27 suites).
+- Frontend: **7/7** (2 suites).
+- الجديد في Sprint 6: **33** اختبار backend + **4** اختبار واجهة.
+- Regression: 194 + 33 = 227 (لا كسر).
+- التقدم: **26/48 = 54.17%**.
+
 ## [0.8.0] - 09 نوفمبر 2026 — Sprint 5.5 (تحصين أمني)
 
 ### أُضيف

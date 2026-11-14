@@ -117,8 +117,10 @@ const CONFIGS: Record<ReferenceEntityType, EntityConfig> = {
     label: "مصدر الراتب",
     fields: ["name", "code", "description"],
     auditFields: ["name", "code", "description", "version"],
-    // ADR-008 §8.5: لا FK من positions.source — الحذف مسموح.
-    usage: noUsage,
+    // ADR-009 §9.2 (8): أصبح positions.sourceId FK → salary_sources.
+    usage: async (id) => [
+      { label: "مناصب", count: await prisma.position.count({ where: { sourceId: id } }) },
+    ],
   },
 };
 

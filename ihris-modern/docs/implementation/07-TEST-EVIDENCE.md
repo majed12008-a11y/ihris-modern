@@ -1,6 +1,6 @@
-# أدلة الاختبار — GAP-001 + GAP-002/003 + Sprint 2.5 + GAP-004/005/006 + Sprint 4 + Sprint 5
+# أدلة الاختبار — GAP-001 + GAP-002/003 + Sprint 2.5 + GAP-004/005/006 + Sprint 4 + Sprint 5 + Sprint 6
 
-> آخر تحديث: 08 نوفمبر 2026 — Sprint 1.5b/1.5c + Sprint 2 + Sprint 2.5 + Sprint 3 + Sprint 4 + Sprint 5.
+> آخر تحديث: 14 نوفمبر 2026 — Sprint 1.5b/1.5c + Sprint 2 + Sprint 2.5 + Sprint 3 + Sprint 4 + Sprint 5 + Sprint 5.5 + Sprint 6.
 > كل رقم أدناه مأخوذ من تشغيل فعلي، لا من تقدير.
 
 ## 1. تصحيح تاريخي
@@ -20,7 +20,7 @@
 | عزل المعاملات | `src/__tests__/setup.ts`: كل `it` داخل معاملة Prisma تُلغى (ROLLBACK) بعد الانتهاء |
 | Preflight | `scripts/test-preflight.js` + `npm test` من `ihris-modern/` (يتحقق أيضاً من فشل اتصال مستخدم الاختبار بالإنتاج) |
 
-## 3. Backend — 191/191 ✅ (23 suites)
+## 3. Backend — 227/227 ✅ (27 suites)
 
 الأمر:
 
@@ -364,3 +364,54 @@ INSERT 0 0  (×5 جداول)
 | `salary_grades.start/end/midpoint` | كلها `NULL` — لم يُختبر أي مسار مالي (غير موجود) |
 | `positions.source` | نص حر — لا FK على `salary_sources` (خارج النطاق) |
 | Seed في الإنتاج | لم يُطبَّق؛ اختبارات الـseed على `ihris_test_gap001` فقط |
+
+## 17. Sprint 6 — Backend 227/227 (27 suites)
+
+```text
+PASS src/__tests__/training.test.ts
+PASS src/__tests__/training.security.test.ts
+PASS src/__tests__/training.validation.test.ts
+... (24 ملفاً سابقاً)
+
+Test Suites: 27 passed, 27 total
+Tests:       227 passed, 227 total
+```
+
+### 17.1 Sprint 6 — تفصيل الاختبارات الجديدة (33)
+
+| الملف | العدد | التغطية |
+|-------|-------|---------|
+| `training.test.ts` | 17 | مؤسسة create/read/update/delete (1–4) + دورة create + audit / update version / soft delete / 422 دورات مجدولة / RBAC 403 / 422 مؤسسة مرتبطة (5–10) + دورة مجدولة create + audit / انتقال حالة completed / تسجيل متدرب / عرض متدربين / 422 حذف دورة بها متدربون (11–15) + `positions.sourceId` create / 422 حذف مصدر مستخدم (16–17) |
+| `training.security.test.ts` | 10 | mass assignment ×2، IDOR على تسجيل، SQL injection، version 409، 401، XSS، hr_staff CRUD 403، training_manager CRUD، تسجيل بعد إتمام 422 |
+| `training.validation.test.ts` | 6 | حقول غير معروفة، اسم فارغ، version مطلوب، حالة غير معروفة، personId موجب، تحديث تسجيل فارغ |
+
+### 17.2 Sprint 6 — Frontend 7/7 (2 suites)
+
+| الملف | العدد | التغطية |
+|-------|-------|---------|
+| `Login.test.tsx` | 3 | (سابق) نموذج الدخول + العنوان + استدعاء API |
+| `MainLayout.test.tsx` | 4 | مجموعة «البيانات المرجعية» + بنودها الخمسة، الطي/الفتح، hr_staff لا يرى إدارة المستخدمين، admin يرى المحذوفين (سيناريو القبول 18) |
+
+### 17.3 Sprint 6 — التحقق من الترحيلات والـSeed
+
+```text
+-- بعد تطبيق 011/012/013/014:
+ institutions | statuses | categories | courses | scheduled | enrollments
+--------------+----------+------------+---------+-----------+-------------
+            3 |        2 |          5 |       3 |         3 |           0
+
+-- إعادة تطبيق 014: ON CONFLICT DO NOTHING (0 صفوف جديدة)
+-- rollback 014→011 ثم إعادة التطبيق: نجح بالكامل
+-- training_audit_log: موجود
+-- training_courses.version/deletedAt/updatedAt: موجودة
+-- positions.sourceId: موجود
+```
+
+### 17.4 Sprint 6 — قيود إضافية
+
+| القيد | الأثر |
+|-------|-------|
+| `person_scheduled_training_courses` | 0 صف — الشخصان 10341/15385 غير موجودين في `people`؛ الصفّان مشروطان بـ`EXISTS` |
+| `scheduled_training_courses.status` | `DERIVED` من وثائق القديم (القديم لا يخزّن حالة على مستوى الدورة المجدولة) |
+| `countryId`/`districtId` في التدريب | أرقام قديمة بلا FK للجغرافيا |
+| Seed في الإنتاج | لم يُطبَّق؛ 014 `pending` فقط |
