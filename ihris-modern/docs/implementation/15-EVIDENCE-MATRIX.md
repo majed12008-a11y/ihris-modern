@@ -154,6 +154,20 @@
 | EVID-T-057 | ترحيلات 011–014 | psql على `ihris_test_gap001` | FACT | apply/reapply/rollback/reapply | مؤكدة |
 | EVID-T-058 | Seed تدريب idempotent | psql على `ihris_test_gap001` | FACT | 3/2/5/3/3/0؛ الإعادة بلا تكرار | مؤكدة |
 | EVID-T-059 | `ihris_manage` بعد Sprint 6 | psql على `ihris_manage` | FACT | 0 أعمدة/جداول جديدة | مؤكدة |
+| EVID-259 | خدمة التصدير الموسّعة | `backend/src/services/report.export.service.ts` | FACT | CSV + PDF عربي (تشكيل + BiDi) + XLSX + `buildContentDisposition` | مؤكدة |
+| EVID-260 | خط Amiri مضمَّن | `backend/assets/fonts/Amiri-Regular.ttf` + `OFL.txt` | FACT | TrueType + رخصة OFL 1.1 | مؤكدة |
+| EVID-261 | تعريفات أنواع reshaper | `backend/src/types/arabic-persian-reshaper.d.ts` | FACT | `ArabicShaper`/`PersianShaper` | مؤكدة |
+| EVID-262 | متحكم التصدير | `backend/src/controllers/report.controller.ts` | FACT | `format=xlsx`/`excel` + عنوان التقرير + ترويسات آمنة | مؤكدة |
+| EVID-263 | واجهة التصدير | `frontend/src/pages/ReportExecute.tsx` | FACT | 3 أزرار من الخادم + اسم ملف من الترويسة | مؤكدة |
+| EVID-264 | ADR-010 | `docs/implementation/04-DECISIONS.md` §10 | FACT | 10 قرارات قبل التنفيذ | مؤكدة |
+| EVID-265 | توثيق GAP-L-002 | `gaps/GAP-L-002/analysis.md` + `verification.md` | FACT | 9 قرارات + 27 سيناريو قبول | مؤكدة |
+| EVID-266 | تبعيات التصدير | `backend/package.json` | FACT | `exceljs` + `arabic-persian-reshaper` + `bidi-js` | مؤكدة |
+| EVID-T-060 | تصدير Excel عبر API | `report.test.ts` | FACT | 200 + `spreadsheetml.sheet` + RTL + رأس عربي + خلية رقمية | مؤكدة |
+| EVID-T-061 | `format=excel` (اسم بديل) | `report.test.ts` | FACT | 200 + ملف xlsx صالح | مؤكدة |
+| EVID-T-062 | صيغة غير مدعومة | `report.test.ts` | FACT | 400 + «csv, pdf or xlsx» | مؤكدة |
+| EVID-T-063 | تصدير بلا مصادقة | `report.test.ts` | FACT | 401 | مؤكدة |
+| EVID-T-064 | وحدة التصدير (19) | `report.export.test.ts` | FACT | 19/19: CSV/تشكيل/BiDi/تسميات/PDF/Excel/أمان اسم الملف | مؤكدة |
+| EVID-T-065 | Regression نهائي (Sprint 6.5) | backend + frontend | FACT | 250/250 + 7/7 | مؤكدة |
 
 ---
 
@@ -161,17 +175,18 @@
 
 | النوع | العدد | النسبة المئوية |
 |------|-------|-------------|
-| FACT (حقيقة مثبتة) | 135 | 100% |
+| FACT (حقيقة مثبتة) | 149 | 100% |
 | INFERENCE (استنتاج) | 0 | 0% |
 | ASSUMPTION (افتراض) | 0 | 0% |
 | UNKNOWN (غير معروفة) | 0 | 0% |
-| **الإجمالي** | **135 دليل** | **100%** |
+| **الإجمالي** | **149 دليل** | **100%** |
 
 > تصحيح Sprint 1.5b/1.5c: لم يبقَ أي دليل اختبار UNKNOWN أو INFERENCE؛ كلها نُفِّذت فعلياً.
 > Sprint 2.5 وSprint 3 أضافا 17 دليلاً جديداً (EVID-215..231 + EVID-T-023..032).
 > Sprint 4 أضاف 8 أدلة (EVID-T-033..040).
 > Sprint 5 أضاف 27 دليلاً (EVID-232..247 + EVID-T-041..051).
 > Sprint 6 أضاف 19 دليلاً (EVID-248..258 + EVID-T-052..059) → 135 دليلاً.
+> Sprint 6.5 أضاف 14 دليلاً (EVID-259..266 + EVID-T-060..065) → 149 دليلاً.
 > تصحيح عدّ: 49 دليلاً في §2 + 40 في §3 قبل Sprint 5 = 89 (كان الملخص يذكر 79 خطأً).
 
 ---
@@ -187,8 +202,9 @@
 | عدد الأدلة لـ GAP-M-005..010 (Sprint 4) | 8 أدلة |
 | عدد الأدلة لـ Sprint 5 (المرجعية + Seed + JobDetail) | 27 دليلاً |
 | عدد الأدلة لـ Sprint 6 (التدريب + Polish + tech debt) | 19 دليلاً |
-| عدد الأدلة من النوع FACT | 135 دليل |
+| عدد الأدلة لـ Sprint 6.5 (GAP-L-002: تصدير عربي + Excel) | 14 دليلاً |
+| عدد الأدلة من النوع FACT | 149 دليل |
 | نسبة الأدلة المؤكدة | 100% |
 | قاعدة الاختبار | `ihris_test_gap001` |
 | سجل الترحيل | `migrations/applied/README.md` |
-| التقدم | 26/48 = 54.17% |
+| التقدم | 27/48 = 56.25% |

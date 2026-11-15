@@ -208,6 +208,73 @@ describe("Reports API (integration — real DB)", () => {
     expect(res.body.toString("latin1")).toContain("%%EOF");
   });
 
+  it("يصدّر Excel (xlsx) بورقة RTL وبيانات عربية حقيقية", async () => {
+    const createRes = await request(app)
+      .post("/api/reports")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ name: "تقرير Excel", type: "list", definition: baseDefinition() });
+
+    const res = await request(app)
+      .post(`/api/reports/${createRes.body.id}/export?format=xlsx`)
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({})
+      .buffer(true)
+      .parse(binaryParser);
+
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toContain("spreadsheetml.sheet");
+    expect(res.headers["x-report-row-count"]).toBe("3");
+    // ملف xlsx حاوية ZIP
+    expect(res.body.subarray(0, 2).toString()).toBe("PK");
+    expect(res.body.length).toBeGreaterThan(1000);
+
+    const ExcelJS = (await import("exceljs")).default;
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(res.body as unknown as ArrayBuffer);
+    const sheet = workbook.worksheets[0];
+    expect((sheet.views?.[0] as { rightToLeft?: boolean }).rightToLeft).toBe(true);
+    expect(sheet.getRow(1).getCell(2).value).toBe("الاسم الأول");
+    expect(sheet.getRow(2).getCell(2).value).toBe("سالم");
+  });
+
+  it("يقبل الاسم البديل format=excel", async () => {
+    const createRes = await request(app)
+      .post("/api/reports")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ name: "تقرير Excel alias", type: "list", definition: baseDefinition() });
+
+    const res = await request(app)
+      .post(`/api/reports/${createRes.body.id}/export?format=excel`)
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({})
+      .buffer(true)
+      .parse(binaryParser);
+
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toContain("spreadsheetml.sheet");
+    expect(res.body.subarray(0, 2).toString()).toBe("PK");
+  });
+
+  it("يرفض صيغة تصدير غير مدعومة بـ400", async () => {
+    const createRes = await request(app)
+      .post("/api/reports")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ name: "تقرير صيغة خاطئة", type: "list", definition: baseDefinition() });
+
+    const res = await request(app)
+      .post(`/api/reports/${createRes.body.id}/export?format=docx`)
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({});
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("csv, pdf or xlsx");
+  });
+
+  it("يرفض التصدير دون مصادقة (401)", async () => {
+    const res = await request(app).post("/api/reports/1/export?format=xlsx").send({});
+    expect(res.status).toBe(401);
+  });
+
   it("يرفض إنشاء تقرير بتعريف خطير", async () => {
     const res = await request(app)
       .post("/api/reports")

@@ -305,4 +305,33 @@ BLK-012 **مغلق** (وحدة التدريب end-to-end). `positions.source` �
 Seed التدريب 16 صفاً FACT (ESTIMATE = 0)؛ صفّا التسجيل مؤجّلان بشرط `EXISTS`.
 لا push؛ الفرع `feature/sprint-6-training`.
 
+## يوم Sprint 6.5 — 15 نوفمبر 2026
+
+### GAP-L-002 — تصدير PDF عربي + Excel
+
+| الوقت | المهمة | التفاصيل | الحالة |
+|-------|--------|---------|---------|
+| 09:00 | محاولة الدفع | `git remote -v` فارغ → لا remote؛ تأجيل بقرار المستخدم | ⏸ |
+| 09:20 | تحليل GAP-L-002 | `gaps/GAP-L-002/analysis.md` — فجوة عرضية بلا مخطط | ✅ |
+| 09:40 | ADR-010 (10 قرارات) | `04-DECISIONS.md` §10 | ✅ |
+| 10:00 | تثبيت التبعيات | `exceljs@4.4.0` + `arabic-persian-reshaper@1.0.1` + `bidi-js@1.1.0` | ✅ |
+| 10:20 | خط Amiri + ترخيصه | `assets/fonts/Amiri-Regular.ttf` (431KB) + `OFL.txt` | ✅ |
+| 10:40 | تحقق تجريبي للخط والتشكيل | `widthOfString` يعمل + PDF 4.9KB صالح | ✅ |
+| 11:00 | إعادة كتابة `report.export.service.ts` | `shapeArabic` + `rtlText` + `toPdf` عربي + `toXlsx` + ترويسة آمنة | ✅ |
+| 12:00 | `report.controller.ts` + `routes/report.ts` | `format=xlsx`/`excel` + عنوان التقرير + 3 ترويسات | ✅ |
+| 12:30 | `ReportExecute.tsx` | 3 أزرار تصدير من الخادم + قراءة اسم الملف من الترويسة | ✅ |
+| 13:00 | `tsc --noEmit` | backend ✅ / frontend ✅ | ✅ |
+| 13:20 | `report.export.test.ts` | 19/19 وحدة | ✅ |
+| 14:00 | `report.test.ts` | +4 تكامل (xlsx/alias/400/401) → 16/16 | ✅ |
+| 14:40 | Regression كامل | 250 backend (28 suites) + 7 frontend | ✅ |
+| 15:20 | إغلاق الوثائق | ADR-010 + REGISTRY 27/48 + DASHBOARD + CHANGELOG 0.10.0 + أدلة | ✅ |
+| 16:00 | Commit | `GAP-L-002: Arabic PDF export + Excel (RTL) + safe filenames` | ✅ |
+
+### الخلاصة
+
+GAP-L-002 **مغلقة** — PDF عربي حقيقي (تشكيل + BiDi + خط مضمَّن) + Excel RTL + CSV موحّد.
+التقدم **27/48 = 56.25%**؛ لا توجد فجوة جزئية متبقية.
+Backend **250/250** (28 suites، +23)؛ Frontend **7/7**؛ `tsc` نظيف على الجانبين.
+لا ترحيل قاعدة بيانات ولا Seed (فجوة عرضية بحتة). لا push — لا remote مضبوط بعد.
+
 

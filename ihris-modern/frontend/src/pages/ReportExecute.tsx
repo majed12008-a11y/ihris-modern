@@ -1,8 +1,9 @@
 import { useParams, useNavigate } from "react-router-dom";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/services/api";
 import { toast } from "sonner";
-import { ArrowLeft, Download, Table } from "lucide-react";
+import { ArrowLeft, Download, Table, FileSpreadsheet, FileText } from "lucide-react";
 
 interface ReportExecutionResult {
   id: number;
@@ -30,6 +31,7 @@ export default function ReportExecute() {
   const { id } = useParams();
   const navigate = useNavigate();
   const reportId = parseInt(id || "0", 0);
+  const [exporting, setExporting] = useState<"csv" | "xlsx" | "pdf" | null>(null);
 
   const { data, isLoading, error } = useQuery<ReportExecutionResult>({
     queryKey: ["report-execution", reportId],
@@ -39,6 +41,52 @@ export default function ReportExecute() {
     },
     enabled: !!reportId,
   });
+
+  /**
+   * تنزيل من الخادم (CSV/Excel/PDF) — التصدير على الخادم يضمن تشكيل العربية
+   * واتجاه RTL في PDF، وورقة RTL في Excel (GAP-L-002).
+   */
+  const downloadExport = async (format: "csv" | "xlsx" | "pdf", definitionId: number, name: string) => {
+    setExporting(format);
+    try {
+      const res = await api.post(`/reports/${definitionId}/export?format=${format}`, {}, {
+        responseType: "blob",
+      });
+
+      const disposition = String(res.headers?.["content-disposition"] ?? "");
+      const encoded = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
+      const plain = /filename="([^"]+)"/i.exec(disposition);
+      const fallback = `report-${definitionId}.${format}`;
+      let filename = fallback;
+      if (encoded) {
+        try {
+          filename = decodeURIComponent(encoded[1]);
+        } catch {
+          filename = plain?.[1] ?? fallback;
+        }
+      } else if (plain) {
+        filename = plain[1];
+      }
+
+      const blob = new Blob([res.data], {
+        type: String(res.headers?.["content-type"] ?? "application/octet-stream"),
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+
+      toast.success(`تم تنزيل ${name} بصيغة ${format.toUpperCase()}`);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "تعذر تصدير التقرير، حاول مرة أخرى";
+      toast.error(message);
+    } finally {
+      setExporting(null);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -136,20 +184,31 @@ export default function ReportExecute() {
               <Download size={16} /> تحميل JSON
             </button>
             <button
-              onClick={() => {
-                const csvContent = convertToCSV(data.result?.data || []);
-                const blob = new Blob([csvContent], { type: "text/csv" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `report-${data.reportDefinition.name}-${new Date().toISOString().slice(0, 10)}.csv`;
-                a.click();
-                URL.revokeObjectURL(url);
-                toast.success("تم تنزيل التقرير بصيغة CSV");
-              }}
-              className="bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition flex items-center gap-1"
+              onClick={() =>
+                downloadExport("csv", data.reportDefinition.id, data.reportDefinition.name)
+              }
+              disabled={exporting !== null}
+              className="bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition flex items-center gap-1 disabled:opacity-60"
             >
-              <Table size={16} /> تحميل CSV
+              <Table size={16} /> {exporting === "csv" ? "جارٍ التصدير..." : "CSV"}
+            </button>
+            <button
+              onClick={() =>
+                downloadExport("xlsx", data.reportDefinition.id, data.reportDefinition.name)
+              }
+              disabled={exporting !== null}
+              className="bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-emerald-800 transition flex items-center gap-1 disabled:opacity-60"
+            >
+              <FileSpreadsheet size={16} /> {exporting === "xlsx" ? "جارٍ التصدير..." : "Excel"}
+            </button>
+            <button
+              onClick={() =>
+                downloadExport("pdf", data.reportDefinition.id, data.reportDefinition.name)
+              }
+              disabled={exporting !== null}
+              className="bg-red-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition flex items-center gap-1 disabled:opacity-60"
+            >
+              <FileText size={16} /> {exporting === "pdf" ? "جارٍ التصدير..." : "PDF عربي"}
             </button>
           </div>
         </div>
@@ -199,17 +258,4 @@ export default function ReportExecute() {
       )}
     </div>
   );
-}
-
-// دالة مساعدة لتحويل البيانات إلى CSV
-function convertToCSV(data: any[]): string {
-  if (!data || data.length === 0) return "";
-  const headers = Object.keys(data[0]);
-  const rows = data.map((row) =>
-    headers.map((header) => {
-      const value = row[header];
-      return typeof value === "string" && value.includes(",") ? `"${value}"` : String(value);
-    })
-  );
-  return [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
 }

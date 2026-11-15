@@ -1,7 +1,13 @@
 import { Response } from "express";
 import { ReportService } from "../services/report.service";
 import { ReportValidator } from "../services/report.validation.service";
-import { toCsv, toPdf } from "../services/report.export.service";
+import {
+  toCsv,
+  toPdf,
+  toXlsx,
+  buildContentDisposition,
+  XLSX_CONTENT_TYPE,
+} from "../services/report.export.service";
 import { asyncHandler } from "../middleware/error";
 import { AuthRequest } from "../middleware/auth";
 
@@ -126,13 +132,15 @@ export class ReportController {
   });
 
   /**
-   * تصدير نتيجة تقرير كملف CSV أو PDF (بيانات فعلية من قاعدة البيانات)
+   * تصدير نتيجة تقرير كملف CSV أو PDF (عربي) أو Excel (بيانات فعلية من قاعدة البيانات)
    */
   static exportReport = asyncHandler(async (req: AuthRequest, res: Response) => {
     const reportDefinitionId = parseInt(req.params.id, 10);
-    const format = String(req.query.format ?? "csv").toLowerCase();
-    if (format !== "csv" && format !== "pdf") {
-      res.status(400).json({ error: "Unsupported format. Use csv or pdf." });
+    const requested = String(req.query.format ?? "csv").toLowerCase();
+    // `excel` اسم بديل مقبول لـ`xlsx`.
+    const format = requested === "excel" ? "xlsx" : requested;
+    if (format !== "csv" && format !== "pdf" && format !== "xlsx") {
+      res.status(400).json({ error: "Unsupported format. Use csv, pdf or xlsx." });
       return;
     }
 
@@ -141,6 +149,9 @@ export class ReportController {
       res.status(404).json({ error: "Report definition not found or disabled" });
       return;
     }
+
+    const reportName: string =
+      (reportCheck.report?.name as string | undefined) ?? `Report #${reportDefinitionId}`;
 
     const userId = req.user?.userId || 1;
 
@@ -157,20 +168,39 @@ export class ReportController {
       data: Array<Record<string, unknown>>;
     };
 
-    const safeName = `report-${reportDefinitionId}`;
+    const generatedAt = new Date();
+    const meta = { title: reportName, generatedAt };
 
     if (format === "csv") {
       const csv = toCsv({ columns, rows: data });
       res.setHeader("Content-Type", "text/csv; charset=utf-8");
-      res.setHeader("Content-Disposition", `attachment; filename="${safeName}.csv"`);
+      res.setHeader(
+        "Content-Disposition",
+        buildContentDisposition(reportDefinitionId, reportName, "csv", generatedAt)
+      );
       res.setHeader("X-Report-Row-Count", String(data.length));
       res.send(csv);
       return;
     }
 
-    const pdf = await toPdf({ columns, rows: data }, `Report #${reportDefinitionId}`);
+    if (format === "xlsx") {
+      const xlsx = await toXlsx({ columns, rows: data }, meta);
+      res.setHeader("Content-Type", XLSX_CONTENT_TYPE);
+      res.setHeader(
+        "Content-Disposition",
+        buildContentDisposition(reportDefinitionId, reportName, "xlsx", generatedAt)
+      );
+      res.setHeader("X-Report-Row-Count", String(data.length));
+      res.send(xlsx);
+      return;
+    }
+
+    const pdf = await toPdf({ columns, rows: data }, meta);
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${safeName}.pdf"`);
+    res.setHeader(
+      "Content-Disposition",
+      buildContentDisposition(reportDefinitionId, reportName, "pdf", generatedAt)
+    );
     res.setHeader("X-Report-Row-Count", String(data.length));
     res.send(pdf);
   });

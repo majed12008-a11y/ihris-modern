@@ -48,7 +48,7 @@ router.delete("/:id", authenticate, ReportController.delete);
 router.post("/:id/execute", authenticate, reportExecutionLimiter, ReportController.execute);
 
 /**
- * @route POST /api/reports/:id/export?format=csv|pdf
+ * @route POST /api/reports/:id/export?format=csv|pdf|xlsx
  * @desc تصدير نتيجة التقرير (بيانات فعلية)
  * @access Private (المستخدمون المصادق عليهم، 10/دقيقة)
  */
