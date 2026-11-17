@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
 import api from "@/services/api";
 import { toast } from "sonner";
-import { Lock, User as UserIcon } from "lucide-react";
+import { Lock, User as UserIcon, LogIn } from "lucide-react";
 
 export default function Login() {
   const [username, setUsername] = useState("");
@@ -20,14 +20,12 @@ export default function Login() {
       const response = await api.post("/auth/login", { username, password });
       const { user, token } = response.data;
 
-      // تخزين في localStorage
       localStorage.setItem("ihris_token", token);
       localStorage.setItem("ihris_user", JSON.stringify(user));
 
-      // تحديث حالة Zustand
       login(user, token);
 
-      toast.success("تم تسجيل الدخول بنجاح");
+      toast.success("تم تسجيل الدخول");
       navigate("/dashboard", { replace: true });
     } catch (error: any) {
       toast.error(error.response?.data?.error || "فشل تسجيل الدخول");
@@ -37,63 +35,140 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="w-full max-w-md p-6 bg-white rounded-xl shadow">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-primary-600">iHRIS Suite</h1>
-          <p className="text-gray-600">تسجيل الدخول إلى نظام إدارة الموارد البشرية</p>
+    <div className="auth-shell">
+      <section className="auth-brand" aria-hidden="true">
+        <div className="brand" style={{ border: 0, padding: 0 }}>
+          <div className="brand-mark">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#EAF3EF"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M4 20V9l8-5 8 5v11" />
+              <path d="M9 20v-5h6v5" />
+            </svg>
+          </div>
+          <div className="brand-text">
+            <span className="brand-name" translate="no">
+              iHRIS Suite
+            </span>
+            <span className="brand-sub">نظام معلومات الموارد البشرية</span>
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
-              اسم المستخدم
-            </label>
-            <div className="relative">
-              <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-5 w-5" />
-              <input
-                id="username"
-                name="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="pl-10 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                required
-              />
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-              كلمة المرور
-            </label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-5 w-5" />
-              <input
-                id="password"
-                name="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="pl-10 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                required
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-primary-600 text-white py-3 rounded-lg font-medium hover:bg-primary-700 disabled:opacity-50 transition"
-          >
-            {loading ? "جاري الدخول..." : "تسجيل الدخول"}
-          </button>
-        </form>
-
-        <div className="mt-6 text-center text-sm text-gray-500">
-          اسم المستخدم: admin | كلمة المرور: admin123
+        <div className="auth-brand-copy">
+          <h1 className="auth-brand-title">
+            سجل واحد
+            <br />
+            لكل موظف في القطاع الصحي
+          </h1>
+          <p className="auth-brand-text">
+            بيانات الموظفين والوظائف والمنشآت والرواتب والتدريب في مكان واحد،
+            مع سجل تغييرات كامل لكل تعديل.
+          </p>
         </div>
-      </div>
+
+        <ul className="auth-facts">
+          <li>سجل تدقيق لكل إضافة وتعديل وحذف</li>
+          <li>تقارير تشغيلية قابلة للتصدير</li>
+          <li>صلاحيات محدّدة بحسب الدور</li>
+        </ul>
+      </section>
+
+      <section className="auth-form-panel">
+        <div className="auth-mobile-brand">
+          <div className="brand-mark" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#EAF3EF"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M4 20V9l8-5 8 5v11" />
+              <path d="M9 20v-5h6v5" />
+            </svg>
+          </div>
+          <div className="brand-text">
+            <span className="brand-name" style={{ color: "var(--text)" }} translate="no">
+              iHRIS
+            </span>
+            <span className="brand-sub" style={{ color: "var(--text-3)" }}>
+              نظام معلومات الموارد البشرية
+            </span>
+          </div>
+        </div>
+
+        <div className="auth-form-card">
+          <h1 className="auth-title">تسجيل الدخول</h1>
+          <p className="auth-sub">أدخل بيانات حسابك للمتابعة.</p>
+
+          <form onSubmit={handleSubmit} className="auth-form">
+            <div className="field">
+              <label className="label" htmlFor="username">
+                اسم المستخدم
+              </label>
+              <div className="input-wrap">
+                <UserIcon aria-hidden="true" />
+                <input
+                  id="username"
+                  name="username"
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="input"
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  autoFocus
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="field">
+              <label className="label" htmlFor="password">
+                كلمة المرور
+              </label>
+              <div className="input-wrap">
+                <Lock aria-hidden="true" />
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="input"
+                  autoComplete="current-password"
+                  required
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="btn btn-primary btn-block"
+              disabled={loading}
+              style={{ height: 40, marginTop: 4 }}
+            >
+              <LogIn aria-hidden="true" />
+              {loading ? "جاري الدخول…" : "تسجيل الدخول"}
+            </button>
+          </form>
+
+          {import.meta.env.DEV && (
+            <p className="auth-demo">
+              بيئة تطوير — الحساب التجريبي: <bdi dir="ltr">admin / admin123</bdi>
+            </p>
+          )}
+        </div>
+
+        <p className="auth-foot">إدارة معلومات الموارد البشرية</p>
+      </section>
     </div>
   );
 }
