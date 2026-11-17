@@ -1,3 +1,4 @@
+-- SQLBook: Code
 -- ============================================================================
 -- سكريبت ترحيل البيانات من MySQL إلى PostgreSQL
 -- iHRIS Suite Migration: MySQL (i2ce) -> PostgreSQL
@@ -383,18 +384,3 @@ ON CONFLICT DO NOTHING;
 
 -- السجلات (البيانات الوصفية فقط)
 INSERT INTO records (id, last_modified, form_id, parent_id)
-SELECT r.id, r.last_modified, r.form, r.parent
-FROM mysql.legacy_record r
-ON CONFLICT (id) DO NOTHING;
-
--- ============================================================================
--- نهاية سكريبت الترحيل
--- ============================================================================
--- أوامر التحقق (بعد التشغيل):
--- SELECT 'people' AS table_name, COUNT(*) FROM people
--- UNION ALL SELECT 'positions', COUNT(*) FROM positions
--- UNION ALL SELECT 'jobs', COUNT(*) FROM jobs
--- UNION ALL SELECT 'facilities', COUNT(*) FROM facilities
--- UNION ALL SELECT 'users', COUNT(*) FROM users
--- UNION ALL SELECT 'salaries', COUNT(*) FROM salaries;
--- ============================================================================
