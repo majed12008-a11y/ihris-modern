@@ -1,4 +1,5 @@
 import { prisma } from "../lib/prisma";
+import { notFound } from "../lib/httpError";
 
 export interface SalaryCreateInput {
   personId: number;
@@ -51,7 +52,7 @@ export class SalaryService {
       where: { id },
       include: { person: true },
     });
-    if (!salary) throw new Error("Salary record not found");
+    if (!salary) throw notFound("Salary record not found");
     return salary;
   }
 
@@ -70,7 +71,7 @@ export class SalaryService {
 
   static async update(id: number, data: Partial<SalaryCreateInput>) {
     const existing = await prisma.salary.findUnique({ where: { id } });
-    if (!existing) throw new Error("Salary record not found");
+    if (!existing) throw notFound("Salary record not found");
 
     return prisma.salary.update({
       where: { id },
@@ -87,7 +88,7 @@ export class SalaryService {
 
   static async delete(id: number) {
     const existing = await prisma.salary.findUnique({ where: { id } });
-    if (!existing) throw new Error("Salary record not found");
+    if (!existing) throw notFound("Salary record not found");
     return prisma.salary.delete({ where: { id } });
   }
 }

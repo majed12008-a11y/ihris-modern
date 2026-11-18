@@ -3,7 +3,9 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/services/api";
 import { toast } from "sonner";
-import { Save, ArrowRight, AlertCircle } from "lucide-react";
+import { AlertCircle, Save } from "lucide-react";
+import PageHeader from "@/components/ui/PageHeader";
+import { ErrorState, LoadingState } from "@/components/ui/StateViews";
 
 interface Reference {
   id: number;
@@ -38,6 +40,9 @@ export default function FacilityForm() {
   const [formData, setFormData] = useState<FacilityFormData>(emptyForm);
   const [version, setVersion] = useState<number | null>(null);
   const [formErrors, setFormErrors] = useState<string[]>([]);
+  const [fieldErrors, setFieldErrors] = useState<
+    Partial<Record<keyof FacilityFormData, string>>
+  >({});
 
   // ------------------------------------------------------------
   // بيانات مرجعية (ADR-006): تحميل عبر API بدل القيم الثابتة
@@ -81,7 +86,12 @@ export default function FacilityForm() {
     enabled: !!formData.districtId,
   });
 
-  const { data: existing, isLoading: isLoadingFacility } = useQuery({
+  const {
+    data: existing,
+    isLoading: isLoadingFacility,
+    error: loadError,
+    refetch,
+  } = useQuery({
     queryKey: ["facility", facilityId],
     queryFn: async () => (await api.get(`/facilities/${facilityId}`)).data,
     enabled: !!facilityId,
@@ -156,20 +166,30 @@ export default function FacilityForm() {
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
+  const set = (key: keyof FacilityFormData, value: string) => {
+    setFormData((prev) => ({ ...prev, [key]: value }));
+    setFieldErrors((prev) => ({ ...prev, [key]: undefined }));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setFormErrors([]);
 
-    if (
-      !formData.name.trim() ||
-      !formData.countryId ||
-      !formData.districtId ||
-      !formData.countyId ||
-      !formData.regionId
-    ) {
+    const nextErrors: Partial<Record<keyof FacilityFormData, string>> = {};
+    if (!formData.name.trim()) nextErrors.name = "اسم المنشأة مطلوب";
+    if (!formData.countryId) nextErrors.countryId = "الدولة مطلوبة";
+    if (!formData.regionId) nextErrors.regionId = "المنطقة مطلوبة";
+    if (!formData.districtId) nextErrors.districtId = "المحافظة مطلوبة";
+    if (!formData.countyId) nextErrors.countyId = "المديرية مطلوبة";
+
+    setFieldErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length > 0) {
       const errors = ["الاسم والدولة والمنطقة والمحافظة والمديرية حقول مطلوبة (BR-097)"];
       setFormErrors(errors);
       toast.error(errors[0]);
+      const firstKey = Object.keys(nextErrors)[0];
+      document.getElementById(`facility-${firstKey}`)?.focus();
       return;
     }
 
@@ -180,203 +200,372 @@ export default function FacilityForm() {
     }
   };
 
+  const nameOf = (list: Reference[], value: string) =>
+    value ? list.find((item) => String(item.id) === value)?.name ?? "—" : "—";
+
   if (isEdit && isLoadingFacility) {
-    return <div className="p-6">جاري تحميل بيانات المنشأة...</div>;
+    return (
+      <div className="stack">
+        <PageHeader
+          title="تعديل منشأة"
+          subtitle="تعديل بيانات المنشأة المحددة"
+          backTo={`/facilities/${facilityId}`}
+          backLabel="العودة إلى المنشأة"
+        />
+        <section className="card">
+          <LoadingState label="جاري تحميل بيانات المنشأة…" />
+        </section>
+      </div>
+    );
+  }
+
+  if (isEdit && loadError) {
+    return (
+      <div className="stack">
+        <PageHeader
+          title="تعديل منشأة"
+          subtitle="تعديل بيانات المنشأة المحددة"
+          backTo="/facilities"
+          backLabel="رجوع إلى المنشآت"
+        />
+        <ErrorState
+          title="تعذّر تحميل المنشأة"
+          message={
+            loadError instanceof Error ? loadError.message : "المنشأة غير موجودة"
+          }
+          onRetry={() => refetch()}
+        />
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <button
-          onClick={() => navigate(isEdit ? `/facilities/${facilityId}` : "/facilities")}
-          className="text-primary-600 hover:text-primary-800 flex items-center gap-2"
-        >
-          <ArrowRight size={18} /> العودة
-        </button>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">
-            {isEdit ? "تعديل منشأة" : "إضافة منشأة جديدة"}
-          </h1>
-          <p className="text-gray-600">
-            {isEdit ? "تعديل بيانات المنشأة المحددة" : "إدخال منشأة صحية جديدة في النظام"}
-          </p>
-        </div>
-      </div>
+    <div className="stack">
+      <PageHeader
+        title={isEdit ? "تعديل منشأة" : "إضافة منشأة جديدة"}
+        subtitle={
+          isEdit
+            ? "تعديل بيانات المنشأة المحددة"
+            : "إدخال منشأة صحية جديدة في النظام"
+        }
+        backTo={isEdit ? `/facilities/${facilityId}` : "/facilities"}
+        backLabel={isEdit ? "العودة إلى المنشأة" : "رجوع إلى المنشآت"}
+      />
 
       {formErrors.length > 0 && (
-        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 text-sm space-y-1">
-          <div className="flex items-center gap-2 font-bold">
-            <AlertCircle size={18} /> تعذّر الحفظ
+        <div className="alert alert-danger" role="alert">
+          <AlertCircle aria-hidden="true" />
+          <div>
+            <strong>تعذّر الحفظ.</strong>
+            <ul style={{ margin: "4px 0 0", paddingInlineStart: 18 }}>
+              {formErrors.map((err, index) => (
+                <li key={index}>{err}</li>
+              ))}
+            </ul>
           </div>
-          {formErrors.map((err, i) => (
-            <div key={i}>• {err}</div>
-          ))}
         </div>
       )}
 
-      <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div className="md:col-span-2 lg:col-span-3">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                اسم المنشأة *
-              </label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                required
-                maxLength={255}
-              />
+      <div className="form-layout">
+        <form
+          id="facility-form"
+          className="main-col form-stack"
+          onSubmit={handleSubmit}
+          noValidate
+        >
+          <section className="card">
+            <div className="form-section-head">
+              <span className="form-section-num" aria-hidden="true">
+                1
+              </span>
+              <h2 className="form-section-title">بيانات المنشأة</h2>
+              <span className="form-section-note">BR-097</span>
             </div>
+            <div className="form-body">
+              <div className="field full">
+                <label className="label" htmlFor="facility-name">
+                  اسم المنشأة <span className="req">*</span>
+                </label>
+                <input
+                  className={`input${fieldErrors.name ? " is-invalid" : ""}`}
+                  id="facility-name"
+                  name="name"
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => set("name", e.target.value)}
+                  maxLength={255}
+                  aria-invalid={fieldErrors.name ? "true" : undefined}
+                  aria-describedby={fieldErrors.name ? "facility-name-err" : undefined}
+                  required
+                />
+                {fieldErrors.name && (
+                  <p className="err" id="facility-name-err">
+                    <AlertCircle aria-hidden="true" />
+                    {fieldErrors.name}
+                  </p>
+                )}
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                نوع المنشأة
-              </label>
-              <select
-                value={formData.facilityTypeId}
-                onChange={(e) =>
-                  setFormData({ ...formData, facilityTypeId: e.target.value })
-                }
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-              >
-                <option value="">اختر النوع</option>
-                {facilityTypes.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
+              <div className="field">
+                <label className="label" htmlFor="facility-type">
+                  نوع المنشأة
+                </label>
+                <select
+                  className="select"
+                  id="facility-type"
+                  value={formData.facilityTypeId}
+                  onChange={(e) => set("facilityTypeId", e.target.value)}
+                >
+                  <option value="">اختر النوع</option>
+                  {facilityTypes.map((type) => (
+                    <option key={type.id} value={type.id}>
+                      {type.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="field">
+                <label className="label" htmlFor="facility-country">
+                  الدولة <span className="req">*</span>
+                </label>
+                <select
+                  className={`select${fieldErrors.countryId ? " is-invalid" : ""}`}
+                  id="facility-country"
+                  value={formData.countryId}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      countryId: e.target.value,
+                      districtId: "",
+                      countyId: "",
+                    })
+                  }
+                  aria-invalid={fieldErrors.countryId ? "true" : undefined}
+                  aria-describedby={
+                    fieldErrors.countryId ? "facility-country-err" : undefined
+                  }
+                  required
+                >
+                  <option value="">اختر الدولة</option>
+                  {countries.map((country) => (
+                    <option key={country.id} value={country.id}>
+                      {country.name}
+                    </option>
+                  ))}
+                </select>
+                {fieldErrors.countryId && (
+                  <p className="err" id="facility-country-err">
+                    <AlertCircle aria-hidden="true" />
+                    {fieldErrors.countryId}
+                  </p>
+                )}
+              </div>
+
+              <div className="field">
+                <label className="label" htmlFor="facility-region">
+                  المنطقة <span className="req">*</span>
+                </label>
+                <select
+                  className={`select${fieldErrors.regionId ? " is-invalid" : ""}`}
+                  id="facility-region"
+                  value={formData.regionId}
+                  onChange={(e) => set("regionId", e.target.value)}
+                  aria-invalid={fieldErrors.regionId ? "true" : undefined}
+                  aria-describedby={
+                    fieldErrors.regionId ? "facility-region-err" : undefined
+                  }
+                  required
+                >
+                  <option value="">اختر المنطقة</option>
+                  {regions.map((region) => (
+                    <option key={region.id} value={region.id}>
+                      {region.name}
+                    </option>
+                  ))}
+                </select>
+                {fieldErrors.regionId && (
+                  <p className="err" id="facility-region-err">
+                    <AlertCircle aria-hidden="true" />
+                    {fieldErrors.regionId}
+                  </p>
+                )}
+              </div>
+
+              <div className="field">
+                <label className="label" htmlFor="facility-district">
+                  المحافظة <span className="req">*</span>
+                </label>
+                <select
+                  className={`select${fieldErrors.districtId ? " is-invalid" : ""}`}
+                  id="facility-district"
+                  value={formData.districtId}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      districtId: e.target.value,
+                      countyId: "",
+                    })
+                  }
+                  aria-invalid={fieldErrors.districtId ? "true" : undefined}
+                  aria-describedby={
+                    fieldErrors.districtId ? "facility-district-err" : undefined
+                  }
+                  required
+                  disabled={!formData.countryId || loadingDistricts}
+                >
+                  <option value="">
+                    {!formData.countryId
+                      ? "اختر الدولة أولاً"
+                      : loadingDistricts
+                      ? "جاري التحميل…"
+                      : "اختر المحافظة"}
                   </option>
-                ))}
-              </select>
-            </div>
+                  {districts.map((district) => (
+                    <option key={district.id} value={district.id}>
+                      {district.name}
+                    </option>
+                  ))}
+                </select>
+                {fieldErrors.districtId && (
+                  <p className="err" id="facility-district-err">
+                    <AlertCircle aria-hidden="true" />
+                    {fieldErrors.districtId}
+                  </p>
+                )}
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                الدولة *
-              </label>
-              <select
-                value={formData.countryId}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    countryId: e.target.value,
-                    districtId: "",
-                    countyId: "",
-                  })
-                }
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                required
-              >
-                <option value="">اختر الدولة</option>
-                {countries.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
+              <div className="field">
+                <label className="label" htmlFor="facility-county">
+                  المديرية <span className="req">*</span>
+                </label>
+                <select
+                  className={`select${fieldErrors.countyId ? " is-invalid" : ""}`}
+                  id="facility-county"
+                  value={formData.countyId}
+                  onChange={(e) => set("countyId", e.target.value)}
+                  aria-invalid={fieldErrors.countyId ? "true" : undefined}
+                  aria-describedby={
+                    fieldErrors.countyId ? "facility-county-err" : undefined
+                  }
+                  required
+                  disabled={!formData.districtId || loadingCounties}
+                >
+                  <option value="">
+                    {!formData.districtId
+                      ? "اختر المحافظة أولاً"
+                      : loadingCounties
+                      ? "جاري التحميل…"
+                      : "اختر المديرية"}
                   </option>
-                ))}
-              </select>
+                  {counties.map((county) => (
+                    <option key={county.id} value={county.id}>
+                      {county.name}
+                    </option>
+                  ))}
+                </select>
+                {fieldErrors.countyId && (
+                  <p className="err" id="facility-county-err">
+                    <AlertCircle aria-hidden="true" />
+                    {fieldErrors.countyId}
+                  </p>
+                )}
+              </div>
+
+              <div className="field full">
+                <span className="hint">
+                  BR-097: المنشأة يجب أن يكون لها دولة ومحافظة ومديرية ومنطقة.
+                </span>
+              </div>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                المنطقة *
-              </label>
-              <select
-                value={formData.regionId}
-                onChange={(e) => setFormData({ ...formData, regionId: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                required
-              >
-                <option value="">اختر المنطقة</option>
-                {regions.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                المحافظة *
-              </label>
-              <select
-                value={formData.districtId}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    districtId: e.target.value,
-                    countyId: "",
-                  })
-                }
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none disabled:bg-gray-50"
-                required
-                disabled={!formData.countryId || loadingDistricts}
-              >
-                <option value="">
-                  {!formData.countryId
-                    ? "اختر الدولة أولاً"
-                    : loadingDistricts
-                    ? "جاري التحميل..."
-                    : "اختر المحافظة"}
-                </option>
-                {districts.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                المديرية *
-              </label>
-              <select
-                value={formData.countyId}
-                onChange={(e) => setFormData({ ...formData, countyId: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none disabled:bg-gray-50"
-                required
-                disabled={!formData.districtId || loadingCounties}
-              >
-                <option value="">
-                  {!formData.districtId
-                    ? "اختر المحافظة أولاً"
-                    : loadingCounties
-                    ? "جاري التحميل..."
-                    : "اختر المديرية"}
-                </option>
-                {counties.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <p className="text-xs text-gray-500">
-            * BR-097: المنشأة يجب أن يكون لها دولة ومحافظة ومديرية ومنطقة.
-          </p>
-
-          <div className="flex gap-3 pt-4 border-t border-gray-100">
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="bg-primary-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-primary-700 disabled:opacity-60 flex items-center gap-2 transition"
-            >
-              <Save size={18} />
-              {isEdit ? "تحديث البيانات" : "حفظ المنشأة"}
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate(isEdit ? `/facilities/${facilityId}` : "/facilities")}
-              className="bg-gray-100 text-gray-700 px-6 py-3 rounded-lg font-medium hover:bg-gray-200 transition"
-            >
-              إلغاء
-            </button>
-          </div>
+          </section>
         </form>
+
+        <aside className="side">
+          <section className="card">
+            <div className="card-head">
+              <h2 className="card-title">ملخّص المنشأة</h2>
+            </div>
+            <div className="card-body">
+              <div className="summary-row">
+                <span className="summary-key">اسم المنشأة</span>
+                <span
+                  className={`summary-val${formData.name.trim() ? "" : " empty"}`}
+                >
+                  {formData.name.trim() || "غير مكتمل"}
+                </span>
+              </div>
+              <div className="summary-row">
+                <span className="summary-key">النوع</span>
+                <span
+                  className={`summary-val${
+                    formData.facilityTypeId ? "" : " empty"
+                  }`}
+                >
+                  {nameOf(facilityTypes, formData.facilityTypeId)}
+                </span>
+              </div>
+              <div className="summary-row">
+                <span className="summary-key">الدولة</span>
+                <span className={`summary-val${formData.countryId ? "" : " empty"}`}>
+                  {nameOf(countries, formData.countryId)}
+                </span>
+              </div>
+              <div className="summary-row">
+                <span className="summary-key">المنطقة</span>
+                <span className={`summary-val${formData.regionId ? "" : " empty"}`}>
+                  {nameOf(regions, formData.regionId)}
+                </span>
+              </div>
+              <div className="summary-row">
+                <span className="summary-key">المحافظة</span>
+                <span className={`summary-val${formData.districtId ? "" : " empty"}`}>
+                  {nameOf(districts, formData.districtId)}
+                </span>
+              </div>
+              <div className="summary-row">
+                <span className="summary-key">المديرية</span>
+                <span className={`summary-val${formData.countyId ? "" : " empty"}`}>
+                  {nameOf(counties, formData.countyId)}
+                </span>
+              </div>
+            </div>
+          </section>
+
+          <section className="card">
+            <div
+              className="card-body"
+              style={{ display: "flex", flexDirection: "column", gap: 9 }}
+            >
+              <button
+                type="submit"
+                form="facility-form"
+                className="btn btn-primary btn-block"
+                disabled={isSaving}
+              >
+                <Save aria-hidden="true" />
+                {isSaving
+                  ? "جاري الحفظ…"
+                  : isEdit
+                  ? "تحديث البيانات"
+                  : "حفظ المنشأة"}
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost btn-block"
+                onClick={() =>
+                  navigate(isEdit ? `/facilities/${facilityId}` : "/facilities")
+                }
+              >
+                إلغاء
+              </button>
+              <p className="side-note">
+                الحقول المعلّمة بـ <span className="req">*</span> إلزامية بحسب
+                BR-097.
+              </p>
+            </div>
+          </section>
+        </aside>
       </div>
     </div>
   );

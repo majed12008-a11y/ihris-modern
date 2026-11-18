@@ -1,5 +1,6 @@
 import { prisma } from "../lib/prisma";
 import { ReportEngine } from "./report.engine";
+import { notFound } from "../lib/httpError";
 
 export interface ReportDefinitionCreateInput {
   name: string;
@@ -120,7 +121,7 @@ export class ReportService {
     });
 
     if (!report) {
-      throw new Error("Report definition not found");
+      throw notFound("Report definition not found");
     }
 
     return report;
@@ -157,7 +158,7 @@ export class ReportService {
       where: { id },
     });
     if (!existing) {
-      throw new Error("Report definition not found");
+      throw notFound("Report definition not found");
     }
 
     return prisma.reportDefinition.update({
@@ -190,7 +191,7 @@ export class ReportService {
       },
     });
     if (!existing) {
-      throw new Error("Report definition not found");
+      throw notFound("Report definition not found");
     }
 
     // منع الحذف إذا كانت هناك عمليات تنفيذ مرتبطة (اختياري - يمكن تغيير هذا لاحقًا)
@@ -218,7 +219,7 @@ export class ReportService {
     });
 
     if (!reportDefinition) {
-      throw new Error("Report definition not found");
+      throw notFound("Report definition not found");
     }
 
     if (!reportDefinition.isEnabled) {
@@ -326,7 +327,7 @@ export class ReportService {
     });
 
     if (!execution) {
-      throw new Error("Report execution not found");
+      throw notFound("Report execution not found");
     }
 
     return execution;

@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import api from "@/services/api";
 import { useAuthStore } from "@/store/authStore";
 import { extractErrorMessages } from "@/lib/errorDetails";
@@ -15,9 +15,19 @@ import {
   Trash2,
   CalendarPlus,
   ClipboardList,
+  SearchX,
   AlertTriangle,
   X,
 } from "lucide-react";
+import PageHeader from "@/components/ui/PageHeader";
+import Pagination from "@/components/ui/Pagination";
+import SearchInput from "@/components/ui/SearchInput";
+import Pill from "@/components/ui/Pill";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { EmptyState, ErrorState, TableSkeleton } from "@/components/ui/StateViews";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useListParams } from "@/hooks/useListParams";
+import { formatDate, formatNumber } from "@/lib/format";
 
 interface EnrolledPerson {
   id: number;
@@ -54,6 +64,10 @@ interface Institution {
   name: string;
 }
 
+type Tone = "ok" | "warn" | "danger" | "mute";
+
+const PAGE_SIZES = [10, 25, 50];
+
 const STATUS_LABELS: Record<string, string> = {
   planning: "قيد التخطيط",
   scheduled: "مجدولة",
@@ -61,12 +75,21 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: "ملغاة",
 };
 
-const STATUS_STYLES: Record<string, string> = {
-  planning: "bg-amber-100 text-amber-700",
-  scheduled: "bg-blue-100 text-blue-700",
-  completed: "bg-green-100 text-green-700",
-  cancelled: "bg-red-100 text-red-700",
+const SCHEDULED_TONES: Record<string, Tone> = {
+  planning: "warn",
+  scheduled: "ok",
+  completed: "ok",
+  cancelled: "danger",
 };
+
+/** لون حبة حالة الدورة بحسب اسمها المرجعي (عربي أو إنجليزي). */
+function courseStatusTone(name: string | null | undefined): Tone {
+  if (!name) return "mute";
+  if (/مكتمل|منته|completed|done/i.test(name)) return "ok";
+  if (/ملغ|إلغاء|الغاء|cancel/i.test(name)) return "danger";
+  if (/قيد|جار|مخطط|planning|progress|schedul/i.test(name)) return "warn";
+  return "mute";
+}
 
 function errorToText(error: unknown): string {
   return extractErrorMessages(error).join(" — ");
@@ -74,11 +97,33 @@ function errorToText(error: unknown): string {
 
 export default function Training() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const canWrite =
     user?.role === "admin" || user?.role === "hr_manager" || user?.role === "training_manager";
+
+  const { q, page, limit, setQ, setPage, setLimit } = useListParams({
+    defaultLimit: PAGE_SIZES[0],
+  });
+  const [searchInput, setSearchInput] = useState(q);
+  const debouncedInput = useDebouncedValue(searchInput, 300);
+
   const [deleteTarget, setDeleteTarget] = useState<TrainingCourse | null>(null);
   const [deleteErrors, setDeleteErrors] = useState<string[]>([]);
+
+  useEffect(() => {
+    const next = debouncedInput.trim();
+    if (next !== q) setQ(next);
+  }, [debouncedInput, q, setQ]);
+
+  useEffect(() => {
+    setSearchInput(q);
+  }, [q]);
+
+  useEffect(() => {
+    setDeleteTarget(null);
+    setDeleteErrors([]);
+  }, [q, page, limit]);
 
   const coursesQuery = useQuery<TrainingCourse[]>({
     queryKey: ["training-courses"],
@@ -106,274 +151,441 @@ export default function Training() {
   const isLoading = coursesQuery.isLoading || institutionsQuery.isLoading;
   const error = coursesQuery.error || institutionsQuery.error;
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-600">جاري تحميل بيانات التدريب...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
-        <div className="bg-white p-8 rounded-xl shadow border border-red-100 max-w-md text-center">
-          <div className="text-red-600 font-bold mb-2">⚠️ حدث خطأ في تحميل البيانات</div>
-          <p className="text-gray-600 text-sm mb-4">{errorToText(error)}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700"
-          >
-            إعادة تحميل الصفحة
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   const courses = coursesQuery.data ?? [];
   const institutions = institutionsQuery.data ?? [];
-  const scheduled = courses.flatMap((course) =>
-    course.scheduledCourses.map((item) => ({ ...item, courseName: course.name }))
+
+  const scheduled = useMemo(
+    () =>
+      courses.flatMap((course) =>
+        course.scheduledCourses.map((item) => ({ ...item, courseName: course.name }))
+      ),
+    [courses]
   );
-  const totalEnrolled = scheduled.reduce((sum, item) => sum + item.personScheduled.length, 0);
+
+  const totalEnrolled = useMemo(
+    () => scheduled.reduce((sum, item) => sum + item.personScheduled.length, 0),
+    [scheduled]
+  );
+
+  const filteredCourses = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    if (!term) return courses;
+    return courses.filter((course) =>
+      [
+        course.name,
+        course.topic,
+        course.trainingInstitution?.name,
+        course.trainingCourseCategory?.name,
+        course.trainingCourseStatus?.name,
+      ].some((value) => (value ?? "").toLowerCase().includes(term))
+    );
+  }, [courses, q]);
+
+  const total = filteredCourses.length;
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const currentPage = Math.min(page, totalPages);
+  const rows = filteredCourses.slice((currentPage - 1) * limit, currentPage * limit);
+  const from = total === 0 ? 0 : (currentPage - 1) * limit + 1;
+  const to = Math.min(currentPage * limit, total);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages, setPage]);
+
+  const clearSearch = () => {
+    setSearchInput("");
+    setQ("");
+  };
+
+  const kpis = [
+    { label: "الدورات التدريبية", value: courses.length, icon: GraduationCap },
+    { label: "المؤسسات التدريبية", value: institutions.length, icon: Building2 },
+    { label: "الدورات المجدولة", value: scheduled.length, icon: BookOpen },
+    { label: "المتدربون المسجلون", value: totalEnrolled, icon: Users },
+  ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">إدارة التدريب</h1>
-          <p className="text-gray-600">الدورات التدريبية، المؤسسات، الدورات المجدولة والمتسجلون</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            to="/training/institutions"
-            className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg flex items-center gap-2 font-medium hover:bg-gray-50 transition"
-          >
-            <Building2 size={18} /> المؤسسات التدريبية
-          </Link>
-          {canWrite && (
-            <Link
-              to="/training/new"
-              className="bg-primary-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium hover:bg-primary-700 transition"
+    <div className="stack">
+      <PageHeader
+        title="إدارة التدريب"
+        subtitle="الدورات التدريبية، المؤسسات، الدورات المجدولة والمتسجلون"
+        actions={
+          <>
+            <a
+              className="btn btn-ghost"
+              href="/training/institutions"
+              onClick={(event) => {
+                event.preventDefault();
+                navigate("/training/institutions");
+              }}
             >
-              <Plus size={18} /> دورة جديدة
-            </Link>
-          )}
-        </div>
-      </div>
+              <Building2 aria-hidden="true" />
+              المؤسسات التدريبية
+            </a>
+            {canWrite && (
+              <a
+                className="btn btn-primary"
+                href="/training/new"
+                onClick={(event) => {
+                  event.preventDefault();
+                  navigate("/training/new");
+                }}
+              >
+                <Plus aria-hidden="true" />
+                دورة جديدة
+              </a>
+            )}
+          </>
+        }
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        {[
-          { label: "الدورات التدريبية", value: courses.length, icon: GraduationCap },
-          { label: "المؤسسات التدريبية", value: institutions.length, icon: Building2 },
-          { label: "الدورات المجدولة", value: scheduled.length, icon: BookOpen },
-          { label: "المتدربون المسجلون", value: totalEnrolled, icon: Users },
-        ].map((card) => {
-          const Icon = card.icon;
+      {error && (
+        <ErrorState
+          title="حدث خطأ في تحميل البيانات"
+          message={errorToText(error)}
+          onRetry={() => {
+            coursesQuery.refetch();
+            institutionsQuery.refetch();
+          }}
+        />
+      )}
+
+      <section className="kpi-strip" aria-label="مؤشرات التدريب">
+        {kpis.map((kpi) => {
+          const Icon = kpi.icon;
           return (
-            <div key={card.label} className="bg-white p-6 rounded-xl shadow border border-gray-100">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">{card.label}</p>
-                  <p className="text-2xl font-bold text-primary-600">{card.value}</p>
-                </div>
-                <Icon size={32} className="text-primary-100 bg-primary-50 p-2 rounded-lg" />
-              </div>
+            <div className="kpi" key={kpi.label}>
+              <span className="kpi-top">
+                <span className="kpi-icon">
+                  <Icon aria-hidden="true" />
+                </span>
+                <span className="kpi-label">{kpi.label}</span>
+              </span>
+              <span className="kpi-row">
+                {isLoading ? (
+                  <span className="skeleton" style={{ width: 64, height: 30 }} />
+                ) : (
+                  <span className="kpi-value">{formatNumber(kpi.value)}</span>
+                )}
+              </span>
             </div>
           );
         })}
-      </div>
+      </section>
 
-      <div className="bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
-        <h2 className="px-6 py-4 text-lg font-bold border-b border-gray-100">الدورات التدريبية</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-gray-50 border-b border-gray-200">
+      <section className="card">
+        <div className="card-head">
+          <h2 className="card-title">الدورات التدريبية</h2>
+          <span className="card-sub">{formatNumber(total)} دورة</span>
+        </div>
+
+        <div className="toolbar">
+          <SearchInput
+            value={searchInput}
+            onChange={setSearchInput}
+            placeholder="ابحث باسم الدورة أو الموضوع أو المؤسسة…"
+            label="بحث في الدورات التدريبية"
+          />
+
+          <select
+            className="select"
+            value={limit}
+            onChange={(event) => setLimit(Number(event.target.value))}
+            aria-label="عدد الدورات في الصفحة"
+          >
+            {PAGE_SIZES.map((size) => (
+              <option key={size} value={size}>
+                {size} في الصفحة
+              </option>
+            ))}
+          </select>
+
+          {(q || searchInput) && (
+            <button type="button" className="clear-link" onClick={clearSearch}>
+              مسح البحث
+            </button>
+          )}
+
+          {q && (
+            <div className="chips">
+              <span className="chip">
+                البحث: {q}
+                <button type="button" aria-label="إزالة فلتر البحث" onClick={clearSearch}>
+                  <X aria-hidden="true" />
+                </button>
+              </span>
+            </div>
+          )}
+        </div>
+
+        <div className="table-wrap">
+          <table className="data-table data-table--dense">
+            <thead>
               <tr>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">اسم الدورة</th>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">الموضوع</th>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">المؤسسة</th>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">التصنيف</th>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">الإصدار</th>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">إجراءات</th>
+                <th scope="col">اسم الدورة</th>
+                <th scope="col" className="col-optional">
+                  الموضوع
+                </th>
+                <th scope="col" className="col-optional">
+                  المؤسسة
+                </th>
+                <th scope="col" className="col-optional">
+                  التصنيف
+                </th>
+                <th scope="col" className="col-compact">
+                  الإصدار
+                </th>
+                <th scope="col">
+                  <span className="sr-only">إجراءات</span>
+                </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
-              {courses.map((course) => (
-                <tr key={course.id} className="hover:bg-gray-50 transition">
-                  <td className="px-6 py-4 font-medium">
-                    <div>{course.name}</div>
-                    <div className="text-xs text-gray-500">
-                      {course.trainingCourseStatus?.name ?? "بدون حالة"}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-gray-600">{course.topic || "—"}</td>
-                  <td className="px-6 py-4 text-gray-600">
-                    {course.trainingInstitution?.name || "—"}
-                  </td>
-                  <td className="px-6 py-4 text-gray-600">
-                    {course.trainingCourseCategory?.name || "—"}
-                  </td>
-                  <td className="px-6 py-4 text-gray-600 text-sm">v{course.version}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
+            <tbody>
+              {isLoading && (
+                <TableSkeleton rows={6} cols={6} widths={[180, 120, 120, 90, 40, 0]} />
+              )}
+
+              {!isLoading &&
+                rows.map((course) => (
+                  <tr key={course.id}>
+                    <td>
+                      <span className="person-meta">
+                        <span className="person-name">{course.name}</span>
+                        <span className="person-sub">
+                          {course.trainingCourseStatus ? (
+                            <Pill tone={courseStatusTone(course.trainingCourseStatus.name)}>
+                              {course.trainingCourseStatus.name}
+                            </Pill>
+                          ) : (
+                            <Pill tone="mute">بدون حالة</Pill>
+                          )}
+                        </span>
+                      </span>
+                    </td>
+                    <td className="col-optional">
+                      <span
+                        style={{
+                          display: "block",
+                          maxWidth: 260,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                        title={course.topic ?? undefined}
+                      >
+                        {course.topic || "—"}
+                      </span>
+                    </td>
+                    <td className="col-optional">{course.trainingInstitution?.name || "—"}</td>
+                    <td className="col-optional">
+                      {course.trainingCourseCategory?.name || "—"}
+                    </td>
+                    <td className="mono col-compact">v{course.version}</td>
+                    <td className="col-actions">
                       {canWrite && (
-                        <>
-                          <Link
-                            to={`/training/courses/${course.id}/edit`}
-                            className="text-primary-600 hover:text-primary-800 p-1"
+                        <div className="row-actions">
+                          <a
+                            className="icon-btn icon-btn--sm"
+                            href={`/training/courses/${course.id}/edit`}
+                            aria-label={`تعديل ${course.name}`}
                             title="تعديل"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              navigate(`/training/courses/${course.id}/edit`);
+                            }}
                           >
-                            <Pencil size={18} />
-                          </Link>
-                          <Link
-                            to={`/training/courses/${course.id}/schedule/new`}
-                            className="text-emerald-600 hover:text-emerald-800 p-1"
+                            <Pencil aria-hidden="true" />
+                          </a>
+                          <a
+                            className="icon-btn icon-btn--sm"
+                            href={`/training/courses/${course.id}/schedule/new`}
+                            aria-label={`جدولة ${course.name}`}
                             title="جدولة دورة"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              navigate(`/training/courses/${course.id}/schedule/new`);
+                            }}
                           >
-                            <CalendarPlus size={18} />
-                          </Link>
+                            <CalendarPlus aria-hidden="true" />
+                          </a>
                           <button
+                            type="button"
+                            className="icon-btn icon-btn--sm danger"
+                            aria-label={`حذف ${course.name}`}
+                            title="حذف"
                             onClick={() => {
                               setDeleteTarget(course);
                               setDeleteErrors([]);
                             }}
-                            className="text-red-600 hover:text-red-800 p-1"
-                            title="حذف"
                           >
-                            <Trash2 size={18} />
+                            <Trash2 aria-hidden="true" />
                           </button>
-                        </>
+                        </div>
                       )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </div>
-        {!courses.length && (
-          <div className="text-center py-12 text-gray-500">لا توجد دورات تدريبية</div>
-        )}
-      </div>
 
-      <div className="bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
-        <h2 className="px-6 py-4 text-lg font-bold border-b border-gray-100">الدورات المجدولة</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-gray-50 border-b border-gray-200">
+        {!isLoading && rows.length === 0 && (
+          <EmptyState
+            icon={q ? SearchX : GraduationCap}
+            title={q ? "لا نتائج مطابقة" : "لا توجد دورات تدريبية"}
+            text={
+              q
+                ? `لم نجد دورة تطابق «${q}». جرّب جزءاً من الاسم أو امسح البحث.`
+                : "أضف أول دورة تدريبية لتظهر في القائمة وتُتاح جدولتها."
+            }
+            action={
+              q ? (
+                <button type="button" className="btn btn-ghost btn-sm" onClick={clearSearch}>
+                  مسح البحث
+                </button>
+              ) : canWrite ? (
+                <a
+                  className="btn btn-primary btn-sm"
+                  href="/training/new"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    navigate("/training/new");
+                  }}
+                >
+                  <Plus aria-hidden="true" />
+                  دورة جديدة
+                </a>
+              ) : undefined
+            }
+          />
+        )}
+
+        {!isLoading && rows.length > 0 && (
+          <Pagination
+            page={currentPage}
+            totalPages={totalPages}
+            total={total}
+            from={from}
+            to={to}
+            onPage={setPage}
+            isFetching={coursesQuery.isFetching}
+          />
+        )}
+      </section>
+
+      <section className="card">
+        <div className="card-head">
+          <h2 className="card-title">الدورات المجدولة</h2>
+          <span className="card-sub">{formatNumber(scheduled.length)} جلسة</span>
+        </div>
+
+        <div className="table-wrap">
+          <table className="data-table data-table--dense">
+            <thead>
               <tr>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">الدورة</th>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">الموقع</th>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">الفترة</th>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">الحالة</th>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">المتدربون</th>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">إجراءات</th>
+                <th scope="col">الدورة</th>
+                <th scope="col" className="col-optional">
+                  الموقع
+                </th>
+                <th scope="col" className="col-optional">
+                  الفترة
+                </th>
+                <th scope="col">الحالة</th>
+                <th scope="col" className="col-compact">
+                  المتدربون
+                </th>
+                <th scope="col">
+                  <span className="sr-only">إجراءات</span>
+                </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
-              {scheduled.map((item) => (
-                <tr key={item.id} className="hover:bg-gray-50 transition">
-                  <td className="px-6 py-4 font-medium">{item.courseName}</td>
-                  <td className="px-6 py-4 text-gray-600">{item.site || "—"}</td>
-                  <td className="px-6 py-4 text-gray-600 text-sm">
-                    {item.startDate ? new Date(item.startDate).toLocaleDateString("ar") : "—"}
-                    {" — "}
-                    {item.endDate ? new Date(item.endDate).toLocaleDateString("ar") : "—"}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`px-2 py-1 text-xs rounded-full ${
-                        STATUS_STYLES[item.status] ?? "bg-gray-100 text-gray-700"
-                      }`}
-                    >
-                      {STATUS_LABELS[item.status] ?? item.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-gray-600">
-                    {item.personScheduled.length}
-                    {item.numStudents ? ` / ${item.numStudents}` : ""}
-                  </td>
-                  <td className="px-6 py-4">
-                    <Link
-                      to={`/training/scheduled/${item.id}/enrollments`}
-                      className="text-primary-600 hover:text-primary-800 inline-flex items-center gap-1 text-sm font-medium"
-                    >
-                      <ClipboardList size={16} /> المتدربون
-                    </Link>
-                  </td>
-                </tr>
-              ))}
+            <tbody>
+              {isLoading && (
+                <TableSkeleton rows={5} cols={6} widths={[180, 100, 150, 80, 60, 0]} />
+              )}
+
+              {!isLoading &&
+                scheduled.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <span style={{ fontWeight: 500, color: "var(--text)" }}>
+                        {item.courseName}
+                      </span>
+                    </td>
+                    <td className="col-optional">{item.site || "—"}</td>
+                    <td className="mono col-optional">
+                      {item.startDate || item.endDate
+                        ? `${formatDate(item.startDate)} — ${formatDate(item.endDate)}`
+                        : "—"}
+                    </td>
+                    <td>
+                      <Pill tone={SCHEDULED_TONES[item.status] ?? "mute"}>
+                        {STATUS_LABELS[item.status] ?? item.status}
+                      </Pill>
+                    </td>
+                    <td className="mono col-compact">
+                      {formatNumber(item.personScheduled.length)}
+                      {item.numStudents ? ` / ${formatNumber(item.numStudents)}` : ""}
+                    </td>
+                    <td className="col-actions">
+                      <div className="row-actions">
+                        <a
+                          className="icon-btn icon-btn--sm"
+                          href={`/training/scheduled/${item.id}/enrollments`}
+                          aria-label={`متدربو ${item.courseName}`}
+                          title="المتدربون"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            navigate(`/training/scheduled/${item.id}/enrollments`);
+                          }}
+                        >
+                          <ClipboardList aria-hidden="true" />
+                        </a>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </div>
-        {!scheduled.length && (
-          <div className="text-center py-12 text-gray-500">لا توجد دورات مجدولة بعد</div>
+
+        {!isLoading && scheduled.length === 0 && (
+          <EmptyState
+            icon={BookOpen}
+            title="لا توجد دورات مجدولة بعد"
+            text="جدول دورة من قائمة الدورات أعلاه لتظهر جلساتها هنا مع متدربيها."
+          />
         )}
-      </div>
+      </section>
 
-      {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 m-4">
-            <div className="flex items-start gap-3 mb-4">
-              <div className="bg-red-100 text-red-600 p-2 rounded-full">
-                <AlertTriangle size={22} />
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-bold text-gray-800">تأكيد الحذف</h2>
-                  <button
-                    onClick={() => {
-                      setDeleteTarget(null);
-                      setDeleteErrors([]);
-                    }}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
-                    <X size={20} />
-                  </button>
-                </div>
-                <p className="text-gray-600 text-sm mt-1">
-                  سيُحذف <span className="font-bold">{deleteTarget.name}</span> حذفاً ناعماً.
-                  لا يمكن الحذف إذا كانت له دورة مجدولة.
-                </p>
-              </div>
-            </div>
-
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="تأكيد الحذف"
+        text={
+          <>
+            سيُحذف <strong>{deleteTarget?.name}</strong> حذفاً ناعماً. لا يمكن الحذف إذا كانت له
+            دورة مجدولة.
             {deleteErrors.length > 0 && (
-              <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm space-y-1">
-                {deleteErrors.map((message, index) => (
-                  <div key={index}>• {message}</div>
-                ))}
-              </div>
+              <span className="alert alert-danger" role="alert" style={{ marginTop: 10 }}>
+                <AlertTriangle aria-hidden="true" />
+                <span>
+                  {deleteErrors.map((message, index) => (
+                    <span key={index} style={{ display: "block" }}>
+                      {message}
+                    </span>
+                  ))}
+                </span>
+              </span>
             )}
-
-            <div className="flex gap-3 pt-4 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={() => {
-                  setDeleteTarget(null);
-                  setDeleteErrors([]);
-                }}
-                className="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg font-medium hover:bg-gray-200"
-              >
-                إلغاء
-              </button>
-              <button
-                type="button"
-                disabled={deleteMutation.isPending}
-                onClick={() => deleteMutation.mutate(deleteTarget)}
-                className="bg-red-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-red-700 disabled:opacity-60"
-              >
-                {deleteMutation.isPending ? "جارٍ الحذف..." : "تأكيد الحذف"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </>
+        }
+        confirmLabel="تأكيد الحذف"
+        pending={deleteMutation.isPending}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget)}
+        onClose={() => {
+          setDeleteTarget(null);
+          setDeleteErrors([]);
+        }}
+      />
     </div>
   );
 }

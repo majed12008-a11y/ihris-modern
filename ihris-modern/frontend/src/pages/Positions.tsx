@@ -1,10 +1,19 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import api from "@/services/api";
 import { toast } from "sonner";
-import { Plus, Edit, Trash2, Eye } from "lucide-react";
+import { Briefcase, Pencil, Plus, SearchX, Trash2, X } from "lucide-react";
 import { Position } from "@/types";
+import { formatNumber } from "@/lib/format";
+import PageHeader from "@/components/ui/PageHeader";
+import SearchInput from "@/components/ui/SearchInput";
+import Pagination from "@/components/ui/Pagination";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import Pill from "@/components/ui/Pill";
+import { EmptyState, ErrorState, TableSkeleton } from "@/components/ui/StateViews";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useListParams } from "@/hooks/useListParams";
 
 interface PositionResponse {
   data: Position[];
@@ -14,17 +23,44 @@ interface PositionResponse {
   totalPages: number;
 }
 
+const PAGE_SIZES = [10, 20, 50];
+
 export default function Positions() {
-  const [search, setSearch] = useState("");
-  const [showForm, setShowForm] = useState(false);
-  const [editingPosition, setEditingPosition] = useState<Position | null>(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const { data, isLoading, error } = useQuery<PositionResponse>({
-    queryKey: ["positions", search],
+  const { q, page, limit, setQ, setPage, setLimit } = useListParams({
+    defaultLimit: 20,
+  });
+
+  const [searchInput, setSearchInput] = useState(q);
+  const debouncedInput = useDebouncedValue(searchInput, 300);
+  const search = q;
+
+  const [deleteTarget, setDeleteTarget] = useState<Position | null>(null);
+
+  // إدخال المستخدم ← عنوان URL (بعد توقّف الكتابة)
+  useEffect(() => {
+    const next = debouncedInput.trim();
+    if (next !== q) setQ(next);
+  }, [debouncedInput, q, setQ]);
+
+  // تغيّر خارجي (زر الرجوع أو شريط البحث العلوي) ← حقل البحث
+  useEffect(() => {
+    setSearchInput(q);
+  }, [q]);
+
+  // إعادة ضبط التأكيد عند تغيّر النتائج
+  useEffect(() => {
+    setDeleteTarget(null);
+  }, [search, page, limit]);
+
+  const { data, isLoading, isFetching, error, refetch } = useQuery<PositionResponse>({
+    queryKey: ["positions", search, page, limit],
     queryFn: async () => {
-      const res = await api.get(`/positions?search=${encodeURIComponent(search)}`);
+      const res = await api.get("/positions", {
+        params: { search, page, limit },
+      });
       return res.data;
     },
   });
@@ -37,225 +73,227 @@ export default function Positions() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["positions"] });
       toast.success("تم حذف الوظيفة بنجاح");
+      setDeleteTarget(null);
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.error || "فشل حذف الوظيفة");
     },
   });
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-600">جاري تحميل الوظائف...</p>
-        </div>
-      </div>
-    );
-  }
+  const rows = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 1;
+  const from = total === 0 ? 0 : (page - 1) * limit + 1;
+  const to = Math.min(page * limit, total);
 
-  if (error) {
-    console.error("❌ Positions error:", error);
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
-        <div className="bg-white p-8 rounded-xl shadow border border-red-100 max-w-md text-center">
-          <div className="text-red-600 font-bold mb-2">⚠️ حدث خطأ في تحميل البيانات</div>
-          <p className="text-gray-600 text-sm mb-4">{error instanceof Error ? error.message : String(error)}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700"
-          >
-            إعادة تحميل الصفحة
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const clearSearch = () => {
+    setSearchInput("");
+    setQ("");
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">الوظائف والشواغر</h1>
-          <p className="text-gray-600">إدارة الهيكل الوظيفي والشواغر المتاحة</p>
-        </div>
+    <>
+      <PageHeader
+        title="الوظائف والشواغر"
+        subtitle={
+          isLoading
+            ? "جاري تحميل الوظائف…"
+            : `${formatNumber(total)} وظيفة — إدارة الهيكل الوظيفي والشواغر المتاحة`
+        }
+        actions={
+          <a
+            className="btn btn-primary"
+            href="/positions/new"
+            onClick={(event) => {
+              event.preventDefault();
+              navigate("/positions/new");
+            }}
+          >
+            <Plus aria-hidden="true" />
+            وظيفة جديدة
+          </a>
+        }
+      />
 
-        <div className="flex gap-2">
-          <input
-            type="text"
-            placeholder="البحث باسم الوظيفة..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-64 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+      {error && (
+        <div style={{ marginBottom: 18 }}>
+          <ErrorState
+            message={error instanceof Error ? error.message : String(error)}
+            onRetry={() => refetch()}
           />
-          <button
-            onClick={() => {
-              console.log("🔘 Clicked Add Position button");
-              setEditingPosition(null);
-              setShowForm(true);
-            }}
-            className="bg-primary-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium hover:bg-primary-700 transition"
-          >
-            <Plus size={18} /> وظيفة جديدة
-          </button>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
-        <table className="w-full text-left">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="px-6 py-3 text-sm font-semibold text-gray-700">كود الوظيفة</th>
-              <th className="px-6 py-3 text-sm font-semibold text-gray-700">المسمى الوظيفي</th>
-              <th className="px-6 py-3 text-sm font-semibold text-gray-700">المنشأة</th>
-              <th className="px-6 py-3 text-sm font-semibold text-gray-700">الحالة</th>
-              <th className="px-6 py-3 text-sm font-semibold text-gray-700">الإجراءات</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {(data?.data || []).map((position: Position) => (
-              <tr key={position.id} className="hover:bg-gray-50 transition">
-                <td className="px-6 py-4 font-mono text-sm">{position.code || "--"}</td>
-                <td className="px-6 py-4 font-medium">{position.title || "--"}</td>
-                <td className="px-6 py-4 text-gray-600">--</td>
-                <td className="px-6 py-4">
-                  <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">نشط</span>
-                </td>
-                <td className="px-6 py-4 flex gap-2">
-                  <button
-                    onClick={() => navigate(`/positions/${position.id}`)}
-                    className="text-primary-600 hover:text-primary-800 text-sm flex items-center gap-1"
-                  >
-                    <Eye size={14} /> عرض
-                  </button>
-                  <button
-                    onClick={() => {
-                      setEditingPosition(position);
-                      setShowForm(true);
-                    }}
-                    className="text-blue-600 hover:text-blue-800 text-sm flex items-center gap-1"
-                  >
-                    <Edit size={14} /> تعديل
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (confirm("هل أنت متأكد من حذف هذه الوظيفة؟")) {
-                        deleteMutation.mutate(position.id);
-                      }
-                    }}
-                    className="text-red-600 hover:text-red-800 text-sm flex items-center gap-1"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {!data?.data?.length && (
-        <div className="text-center py-12 text-gray-500">
-          لا توجد بيانات وظائف متاحة
-          <button
-            onClick={() => {
-              setEditingPosition(null);
-              setShowForm(true);
-            }}
-            className="mt-4 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700"
-          >
-            إضافة وظيفة أول
-          </button>
         </div>
       )}
 
-      {/* نموذج إضافة/تعديل وظيفة */}
-      {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 m-4">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-gray-800">
-                {editingPosition ? "تعديل وظيفة" : "إضافة وظيفة جديدة"}
-              </h2>
-              <button
-                onClick={() => {
-                  setShowForm(false);
-                  setEditingPosition(null);
-                }}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                ✕
-              </button>
-            </div>
-            <form className="space-y-4" onSubmit={(e) => {
-              e.preventDefault();
-              console.log("📝 Form submitted");
-            }}>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  كود الوظيفة
-                </label>
-                <input
-                  type="text"
-                  defaultValue={editingPosition?.code || ""}
-                  placeholder="مثل: POS-001"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  المسمى الوظيفي *
-                </label>
-                <input
-                  type="text"
-                  defaultValue={editingPosition?.title || ""}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  الوصف
-                </label>
-                <textarea
-                  defaultValue={editingPosition?.description || ""}
-                  rows={3}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  الراتب المقترح
-                </label>
-                <input
-                  type="text"
-                  defaultValue={editingPosition?.proposedSalary || ""}
-                  placeholder="مثل: 150,000"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                />
-              </div>
-              <div className="flex gap-3 pt-4 border-t border-gray-100">
+      <section className="card">
+        <div className="toolbar">
+          <SearchInput
+            value={searchInput}
+            onChange={setSearchInput}
+            placeholder="البحث باسم الوظيفة…"
+            label="بحث في الوظائف"
+          />
+
+          <select
+            className="select"
+            value={limit}
+            onChange={(event) => setLimit(Number(event.target.value))}
+            aria-label="عدد السجلات في الصفحة"
+          >
+            {PAGE_SIZES.map((size) => (
+              <option key={size} value={size}>
+                {size} في الصفحة
+              </option>
+            ))}
+          </select>
+
+          {(search || searchInput) && (
+            <button type="button" className="clear-link" onClick={clearSearch}>
+              مسح البحث
+            </button>
+          )}
+
+          {search && (
+            <div className="chips">
+              <span className="chip">
+                البحث: {search}
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowForm(false);
-                    setEditingPosition(null);
-                  }}
-                  className="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg font-medium hover:bg-gray-200 transition"
+                  aria-label="إزالة فلتر البحث"
+                  onClick={clearSearch}
                 >
-                  إلغاء
+                  <X aria-hidden="true" />
                 </button>
-                <button
-                  type="submit"
-                  className="bg-primary-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-primary-700 transition"
-                >
-                  حفظ البيانات
-                </button>
-              </div>
-            </form>
-          </div>
+              </span>
+            </div>
+          )}
         </div>
-      )}
-    </div>
+
+        <div className="table-wrap">
+          <table className="data-table data-table--dense">
+            <thead>
+              <tr>
+                <th scope="col" className="col-compact">
+                  كود الوظيفة
+                </th>
+                <th scope="col">المسمى الوظيفي</th>
+                <th scope="col" className="col-optional">
+                  المنشأة
+                </th>
+                <th scope="col">الحالة</th>
+                <th scope="col">
+                  <span className="sr-only">إجراءات</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading && (
+                <TableSkeleton rows={6} cols={5} widths={[80, 200, 120, 60, 0]} />
+              )}
+
+              {!isLoading &&
+                rows.map((position) => (
+                  <tr key={position.id}>
+                    <td className="mono col-compact">{position.code || "—"}</td>
+                    <td>
+                      <span className="person-name">{position.title || "—"}</span>
+                    </td>
+                    <td className="col-optional">—</td>
+                    <td>
+                      <Pill tone="ok">نشط</Pill>
+                    </td>
+                    <td className="col-actions">
+                      <div className="row-actions">
+                        <a
+                          className="icon-btn icon-btn--sm"
+                          href={`/positions/${position.id}/edit`}
+                          aria-label={`تعديل ${position.title || `الوظيفة ${position.id}`}`}
+                          title="تعديل"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            navigate(`/positions/${position.id}/edit`);
+                          }}
+                        >
+                          <Pencil aria-hidden="true" />
+                        </a>
+                        <button
+                          type="button"
+                          className="icon-btn icon-btn--sm danger"
+                          aria-label={`حذف ${position.title || `الوظيفة ${position.id}`}`}
+                          title="حذف"
+                          onClick={() => setDeleteTarget(position)}
+                        >
+                          <Trash2 aria-hidden="true" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+
+        {!isLoading && rows.length === 0 && (
+          <EmptyState
+            icon={search ? SearchX : Briefcase}
+            title={search ? "لا نتائج مطابقة" : "لا توجد وظائف بعد"}
+            text={
+              search
+                ? `لم نجد وظيفة تطابق «${search}». جرّب جزءاً من المسمّى أو امسح البحث.`
+                : "ابدأ بإضافة أول وظيفة لتظهر في الهيكل الوظيفي والشواغر."
+            }
+            action={
+              search ? (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={clearSearch}
+                >
+                  مسح البحث
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => navigate("/positions/new")}
+                >
+                  <Plus aria-hidden="true" />
+                  وظيفة جديدة
+                </button>
+              )
+            }
+          />
+        )}
+
+        {!isLoading && rows.length > 0 && (
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            from={from}
+            to={to}
+            onPage={setPage}
+            isFetching={isFetching}
+          />
+        )}
+      </section>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="حذف الوظيفة"
+        text={
+          deleteTarget ? (
+            <>
+              هل أنت متأكد من حذف هذه الوظيفة؟ سيتم حذف{" "}
+              <strong>{deleteTarget.title || `الوظيفة ${deleteTarget.id}`}</strong>{" "}
+              نهائياً.
+            </>
+          ) : undefined
+        }
+        confirmLabel="تأكيد الحذف"
+        pending={deleteMutation.isPending}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+        onClose={() => setDeleteTarget(null)}
+      />
+    </>
   );
 }

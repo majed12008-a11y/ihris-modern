@@ -1,9 +1,18 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import api from "@/services/api";
 import { toast } from "sonner";
-import { Plus, Edit, Trash2, Eye } from "lucide-react";
+import { Plus, Pencil, Trash2, SearchX, Wallet, X } from "lucide-react";
+import { avatarTone, formatDate, formatNumber, initials } from "@/lib/format";
+import { useAuthStore } from "@/store/authStore";
+import PageHeader from "@/components/ui/PageHeader";
+import Pagination from "@/components/ui/Pagination";
+import SearchInput from "@/components/ui/SearchInput";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { EmptyState, ErrorState, TableSkeleton } from "@/components/ui/StateViews";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useListParams } from "@/hooks/useListParams";
 
 interface SalaryRow {
   id: number;
@@ -27,18 +36,53 @@ interface SalaryResponse {
   totalPages: number;
 }
 
+const PAGE_SIZES = [10, 25, 50];
+
+/** المبلغ يصل كنص من الـAPI — نعرضه منسّقاً إن كان رقماً. */
+function amountLabel(value: string): string {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? formatNumber(parsed) : value;
+}
+
 export default function Salaries() {
-  const [search, setSearch] = useState("");
-  const [showForm, setShowForm] = useState(false);
-  const [editingSalary, setEditingSalary] = useState<SalaryRow | null>(null);
+  const { q, page, limit, setQ, setPage, setLimit } = useListParams({
+    defaultLimit: PAGE_SIZES[0],
+  });
+
+  const [searchInput, setSearchInput] = useState(q);
+  const debouncedInput = useDebouncedValue(searchInput, 300);
+  const [deleteTarget, setDeleteTarget] = useState<SalaryRow | null>(null);
+
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const currentUser = useAuthStore((state) => state.user);
+  const canWrite =
+    currentUser?.role === "admin" || currentUser?.role === "hr_manager";
+  const isAdmin = currentUser?.role === "admin";
 
-  const { data, isLoading, error } = useQuery<SalaryResponse>({
-    queryKey: ["salaries", search],
+  // إدخال المستخدم ← عنوان URL (بعد توقّف الكتابة)
+  useEffect(() => {
+    const next = debouncedInput.trim();
+    if (next !== q) setQ(next);
+  }, [debouncedInput, q, setQ]);
+
+  // تغيّر خارجي (رابط أو زر الرجوع) ← حقل البحث
+  useEffect(() => {
+    setSearchInput(q);
+  }, [q]);
+
+  // إغلاق أي تأكيد معلّق عند تغيّر النتائج
+  useEffect(() => {
+    setDeleteTarget(null);
+  }, [q, page, limit]);
+
+  const { data, isLoading, isFetching, error, refetch } = useQuery<SalaryResponse>({
+    queryKey: ["salaries", q, page, limit],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (search) params.set("search", search);
+      if (q) params.set("search", q);
+      params.set("page", String(page));
+      params.set("limit", String(limit));
       const res = await api.get(`/salaries?${params.toString()}`);
       return res.data;
     },
@@ -51,248 +95,270 @@ export default function Salaries() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["salaries"] });
+      setDeleteTarget(null);
       toast.success("تم حذف الراتب بنجاح");
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.error || "فشل حذف الراتب");
+    onError: (err: any) => {
+      toast.error(err.response?.data?.error || "فشل حذف الراتب");
     },
   });
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-600">جاري تحميل الرواتب...</p>
-        </div>
-      </div>
-    );
-  }
+  const rows = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 1;
+  const from = total === 0 ? 0 : (page - 1) * limit + 1;
+  const to = Math.min(page * limit, total);
 
-  if (error) {
-    console.error("❌ Salaries error:", error);
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
-        <div className="bg-white p-8 rounded-xl shadow border border-red-100 max-w-md text-center">
-          <div className="text-red-600 font-bold mb-2">⚠️ حدث خطأ في تحميل البيانات</div>
-          <p className="text-gray-600 text-sm mb-4">{error instanceof Error ? error.message : String(error)}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700"
-          >
-            إعادة تحميل الصفحة
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const clearSearch = () => {
+    setSearchInput("");
+    setQ("");
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">إدارة الرواتب</h1>
-          <p className="text-gray-600">تسجيل ومتابعة رواتب الموظفين</p>
-        </div>
+    <div className="stack">
+      <PageHeader
+        title="إدارة الرواتب"
+        subtitle={
+          isLoading
+            ? "جاري تحميل السجلات…"
+            : `تسجيل ومتابعة رواتب الموظفين — ${formatNumber(total)} سجل`
+        }
+        actions={
+          canWrite ? (
+            <a
+              className="btn btn-primary"
+              href="/salaries/new"
+              onClick={(event) => {
+                event.preventDefault();
+                navigate("/salaries/new");
+              }}
+            >
+              <Plus aria-hidden="true" />
+              راتب جديد
+            </a>
+          ) : undefined
+        }
+      />
 
-        <div className="flex gap-2">
-          <input
-            type="text"
-            placeholder="البحث باسم الموظف أو الراتب..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-64 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-          />
-          <button
-            onClick={() => {
-              console.log("🔘 Clicked Add Salary button");
-              setEditingSalary(null);
-              setShowForm(true);
-            }}
-            className="bg-primary-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium hover:bg-primary-700 transition"
-          >
-            <Plus size={18} /> راتب جديد
-          </button>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-100">
-          <input
-            type="text"
-            placeholder="البحث باسم الموظف أو الراتب..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-          />
-        </div>
-        <table className="w-full text-left">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="px-6 py-3 text-sm font-semibold text-gray-700">الموظف</th>
-              <th className="px-6 py-3 text-sm font-semibold text-gray-700">تاريخ البدء</th>
-              <th className="px-6 py-3 text-sm font-semibold text-gray-700">تاريخ الانتهاء</th>
-              <th className="px-6 py-3 text-sm font-semibold text-gray-700">المبلغ</th>
-              <th className="px-6 py-3 text-sm font-semibold text-gray-700">ملاحظات</th>
-              <th className="px-6 py-3 text-sm font-semibold text-gray-700">الإجراءات</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {(data?.data || []).map((row: SalaryRow) => (
-              <tr key={row.id} className="hover:bg-gray-50 transition">
-                <td className="px-6 py-4">
-                  <div className="font-medium">{row.person.surname} {row.person.firstname}</div>
-                </td>
-                <td className="px-6 py-4">{new Date(row.startDate).toLocaleDateString("ar-SA")}</td>
-                <td className="px-6 py-4">
-                  {row.endDate ? new Date(row.endDate).toLocaleDateString("ar-SA") : "غير محدد"}
-                </td>
-                <td className="px-6 py-4 font-mono">{row.salary}</td>
-                <td className="px-6 py-4 text-gray-600 text-sm">{row.notes || "-"}</td>
-                <td className="px-6 py-4 flex gap-2">
-                  <button
-                    onClick={() => navigate(`/salaries/${row.id}`)}
-                    className="text-primary-600 hover:text-primary-800 text-sm flex items-center gap-1"
-                  >
-                    <Eye size={14} /> عرض
-                  </button>
-                  <button
-                    onClick={() => {
-                      setEditingSalary(row);
-                      setShowForm(true);
-                    }}
-                    className="text-blue-600 hover:text-blue-800 text-sm flex items-center gap-1"
-                  >
-                    <Edit size={14} /> تعديل
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (confirm("هل أنت متأكد من حذف هذا الراتب؟")) {
-                        deleteMutation.mutate(row.id);
-                      }
-                    }}
-                    className="text-red-600 hover:text-red-800 text-sm flex items-center gap-1"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {!data?.data?.length && (
-        <div className="text-center py-12 text-gray-500">
-          لا توجد بيانات رواتب متاحة
-          <button
-            onClick={() => setShowForm(true)}
-            className="mt-4 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700"
-          >
-            إضافة راتب أول
-          </button>
-        </div>
+      {error && (
+        <ErrorState
+          title="تعذّر تحميل الرواتب"
+          message={error instanceof Error ? error.message : String(error)}
+          onRetry={() => refetch()}
+        />
       )}
 
-      {/* نموذج إضافة/تعديل راتب */}
-      {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 m-4">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-gray-800">
-                {editingSalary ? "تعديل راتب" : "إضافة راتب جديد"}
-              </h2>
-              <button
-                onClick={() => {
-                  setShowForm(false);
-                  setEditingSalary(null);
-                }}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                ✕
-              </button>
-            </div>
-            <form className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  رقم معرف الموظف *
-                </label>
-                <input
-                  type="text"
-                  defaultValue={editingSalary?.personId?.toString() || ""}
-                  placeholder="مثل: 1"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                  required
-                />
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    تاريخ البدء *
-                  </label>
-                  <input
-                    type="date"
-                    defaultValue={editingSalary?.startDate ? new Date(editingSalary.startDate).toISOString().split("T")[0] : ""}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    تاريخ الانتهاء
-                  </label>
-                  <input
-                    type="date"
-                    defaultValue={editingSalary?.endDate ? new Date(editingSalary.endDate).toISOString().split("T")[0] : ""}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                  />
-                </div>
-              </div>
-              <div className="relative">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  المبلغ *
-                </label>
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">ر.ي</span>
-                <input
-                  type="text"
-                  defaultValue={editingSalary?.salary || ""}
-                  placeholder="مثل: 150,000"
-                  className="pl-10 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  ملاحظات
-                </label>
-                <textarea
-                  defaultValue={editingSalary?.notes || ""}
-                  rows={3}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                />
-              </div>
-              <div className="flex gap-3 pt-4 border-t border-gray-100">
+      <section className="card">
+        <div className="toolbar">
+          <SearchInput
+            value={searchInput}
+            onChange={setSearchInput}
+            placeholder="البحث باسم الموظف أو الراتب…"
+            label="بحث في الرواتب"
+          />
+
+          <select
+            className="select"
+            value={limit}
+            onChange={(event) => setLimit(Number(event.target.value))}
+            aria-label="عدد السجلات في الصفحة"
+          >
+            {PAGE_SIZES.map((size) => (
+              <option key={size} value={size}>
+                {size} في الصفحة
+              </option>
+            ))}
+          </select>
+
+          {(q || searchInput) && (
+            <button type="button" className="clear-link" onClick={clearSearch}>
+              مسح البحث
+            </button>
+          )}
+
+          {q && (
+            <div className="chips">
+              <span className="chip">
+                البحث: {q}
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowForm(false);
-                    setEditingSalary(null);
-                  }}
-                  className="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg font-medium hover:bg-gray-200 transition"
+                  aria-label="إزالة فلتر البحث"
+                  onClick={clearSearch}
                 >
-                  إلغاء
+                  <X aria-hidden="true" />
                 </button>
-                <button
-                  type="submit"
-                  className="bg-primary-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-primary-700 transition"
-                >
-                  حفظ البيانات
-                </button>
-              </div>
-            </form>
-          </div>
+              </span>
+            </div>
+          )}
         </div>
-      )}
+
+        <div className="table-wrap">
+          <table className="data-table data-table--dense">
+            <thead>
+              <tr>
+                <th scope="col">الموظف</th>
+                <th scope="col">تاريخ البدء</th>
+                <th scope="col" className="col-optional">
+                  تاريخ الانتهاء
+                </th>
+                <th scope="col" style={{ textAlign: "end" }}>
+                  المبلغ
+                </th>
+                <th scope="col" className="col-optional">
+                  ملاحظات
+                </th>
+                <th scope="col">
+                  <span className="sr-only">إجراءات</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading && (
+                <TableSkeleton
+                  rows={6}
+                  cols={6}
+                  widths={[180, 90, 90, 80, 160, 0]}
+                />
+              )}
+
+              {!isLoading &&
+                rows.map((row) => (
+                  <tr key={row.id}>
+                    <td>
+                      <div className="cell-person">
+                        <span
+                          className={`avatar sm ${avatarTone(row.person.id)}`}
+                          aria-hidden="true"
+                        >
+                          {initials(row.person.firstname, row.person.surname)}
+                        </span>
+                        <span className="person-meta">
+                          <span className="person-name">
+                            {row.person.surname} {row.person.firstname}
+                          </span>
+                          <span className="person-sub">
+                            سجل راتب #{formatNumber(row.id)}
+                          </span>
+                        </span>
+                      </div>
+                    </td>
+                    <td className="mono">{formatDate(row.startDate)}</td>
+                    <td className="mono col-optional">
+                      {row.endDate ? formatDate(row.endDate) : "غير محدد"}
+                    </td>
+                    <td className="num" style={{ textAlign: "end" }}>
+                      {amountLabel(row.salary)}
+                    </td>
+                    <td className="col-optional">
+                      <span
+                        style={{
+                          display: "block",
+                          maxWidth: 300,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                        title={row.notes ?? undefined}
+                      >
+                        {row.notes || "—"}
+                      </span>
+                    </td>
+                    <td className="col-actions">
+                      <div className="row-actions">
+                        {canWrite && (
+                          <a
+                            className="icon-btn icon-btn--sm"
+                            href={`/salaries/${row.id}/edit`}
+                            aria-label={`تعديل راتب ${row.person.surname} ${row.person.firstname}`}
+                            title="تعديل"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              navigate(`/salaries/${row.id}/edit`);
+                            }}
+                          >
+                            <Pencil aria-hidden="true" />
+                          </a>
+                        )}
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            className="icon-btn icon-btn--sm danger"
+                            aria-label={`حذف راتب ${row.person.surname} ${row.person.firstname}`}
+                            title="حذف"
+                            onClick={() => setDeleteTarget(row)}
+                          >
+                            <Trash2 aria-hidden="true" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+
+        {!isLoading && rows.length === 0 && (
+          <EmptyState
+            icon={q ? SearchX : Wallet}
+            title={q ? "لا نتائج مطابقة" : "لا توجد بيانات رواتب متاحة"}
+            text={
+              q
+                ? `لم نجد راتباً يطابق «${q}». جرّب جزءاً من اسم الموظف أو امسح البحث.`
+                : "سجّل أول راتب ليظهر في القائمة وتقارير الموظفين."
+            }
+            action={
+              q ? (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={clearSearch}
+                >
+                  مسح البحث
+                </button>
+              ) : canWrite ? (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => navigate("/salaries/new")}
+                >
+                  <Plus aria-hidden="true" />
+                  إضافة راتب أول
+                </button>
+              ) : undefined
+            }
+          />
+        )}
+
+        {!isLoading && rows.length > 0 && (
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            from={from}
+            to={to}
+            onPage={setPage}
+            isFetching={isFetching}
+          />
+        )}
+      </section>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="حذف الراتب"
+        text={
+          <>
+            سيتم حذف راتب{" "}
+            <strong>
+              {deleteTarget?.person.surname} {deleteTarget?.person.firstname}
+            </strong>{" "}
+            نهائياً. لا يمكن التراجع عن هذا الإجراء.
+          </>
+        }
+        pending={deleteMutation.isPending}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+        onClose={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

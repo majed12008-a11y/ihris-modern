@@ -20,9 +20,6 @@ export default function Login() {
       const response = await api.post("/auth/login", { username, password });
       const { user, token } = response.data;
 
-      localStorage.setItem("ihris_token", token);
-      localStorage.setItem("ihris_user", JSON.stringify(user));
-
       login(user, token);
 
       toast.success("تم تسجيل الدخول");

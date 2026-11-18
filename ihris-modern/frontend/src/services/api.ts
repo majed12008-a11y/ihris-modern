@@ -2,6 +2,29 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 
 const API_BASE_URL = (import.meta as any).env.VITE_API_URL || "/api";
 
+const AUTH_STORAGE_KEY = "ihris-auth-storage";
+
+/** يقرأ الرمز من متجر المصادقة (zustand persist) مع الرجوع للمفتاح القديم. */
+function getStoredToken(): string | null {
+  try {
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const token = parsed?.state?.token;
+      if (typeof token === "string" && token) return token;
+    }
+  } catch {
+    // تخزين تالف — نتجاهله ونكمل بالمفتاح القديم
+  }
+  return localStorage.getItem("ihris_token");
+}
+
+function clearStoredSession() {
+  localStorage.removeItem(AUTH_STORAGE_KEY);
+  localStorage.removeItem("ihris_token");
+  localStorage.removeItem("ihris_user");
+}
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -10,26 +33,21 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const token = localStorage.getItem("ihris_token");
+  const token = getStoredToken();
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`;
   }
-  console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
   return config;
 });
 
 api.interceptors.response.use(
-  (response) => {
-    console.log(`✅ API Response: ${response.status} ${response.config.method?.toUpperCase()} ${response.config.url}`);
-    return response;
-  },
+  (response) => response,
   (error: AxiosError) => {
-    console.error(`❌ API Error: ${error.response?.status} ${error.config?.method?.toUpperCase()} ${error.config?.url}`, error.response?.data);
-    
     if (error.response?.status === 401) {
-      localStorage.removeItem("ihris_token");
-      localStorage.removeItem("ihris_user");
-      window.location.href = "/login";
+      clearStoredSession();
+      if (!window.location.pathname.startsWith("/login")) {
+        window.location.href = "/login";
+      }
     }
     return Promise.reject(error);
   }

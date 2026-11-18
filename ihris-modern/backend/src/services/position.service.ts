@@ -1,4 +1,5 @@
 import { prisma } from "../lib/prisma";
+import { notFound } from "../lib/httpError";
 
 export interface PositionCreateInput {
   code?: string | null;
@@ -89,7 +90,7 @@ export class PositionService {
     });
 
     if (!position) {
-      throw new Error("Position not found");
+      throw notFound("Position not found");
     }
 
     return position;
@@ -122,7 +123,7 @@ export class PositionService {
   static async update(id: number, data: Partial<PositionCreateInput>) {
     const existing = await prisma.position.findUnique({ where: { id } });
     if (!existing) {
-      throw new Error("Position not found");
+      throw notFound("Position not found");
     }
 
     return prisma.position.update({
@@ -152,7 +153,7 @@ export class PositionService {
   static async delete(id: number) {
     const existing = await prisma.position.findUnique({ where: { id } });
     if (!existing) {
-      throw new Error("Position not found");
+      throw notFound("Position not found");
     }
 
     return prisma.position.delete({ where: { id } });

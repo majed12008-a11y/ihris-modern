@@ -1,9 +1,24 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/services/api";
 import { toast } from "sonner";
-import { ArrowLeft, Download, Table, FileSpreadsheet, FileText } from "lucide-react";
+import {
+  Download,
+  Table,
+  FileSpreadsheet,
+  FileText,
+  AlertCircle,
+  SearchX,
+} from "lucide-react";
+import PageHeader from "@/components/ui/PageHeader";
+import Pill from "@/components/ui/Pill";
+import {
+  EmptyState,
+  ErrorState,
+  TableSkeleton,
+} from "@/components/ui/StateViews";
+import { formatNumber } from "@/lib/format";
 
 interface ReportExecutionResult {
   id: number;
@@ -27,13 +42,19 @@ interface ReportExecutionResult {
   executionTimeMs: number | null;
 }
 
+const PAGE_SIZES = [25, 50, 100];
+
 export default function ReportExecute() {
   const { id } = useParams();
   const navigate = useNavigate();
   const reportId = parseInt(id || "0", 0);
-  const [exporting, setExporting] = useState<"csv" | "xlsx" | "pdf" | null>(null);
+  const [exporting, setExporting] = useState<"csv" | "xlsx" | "pdf" | null>(
+    null
+  );
+  const [filterText, setFilterText] = useState("");
+  const [pageSize, setPageSize] = useState(50);
 
-  const { data, isLoading, error } = useQuery<ReportExecutionResult>({
+  const { data, isLoading, error, refetch } = useQuery<ReportExecutionResult>({
     queryKey: ["report-execution", reportId],
     queryFn: async () => {
       const res = await api.get(`/reports/executions/${reportId}`);
@@ -88,174 +109,341 @@ export default function ReportExecute() {
     }
   };
 
+  const downloadJson = () => {
+    if (!data) return;
+    const dataStr = JSON.stringify(data.result, null, 2);
+    const blob = new Blob([dataStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `report-${data.reportDefinition.name}-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("تم تنزيل التقرير بصيغة JSON");
+  };
+
+  const rows: Array<Record<string, unknown>> = useMemo(() => {
+    const raw = data?.result?.data;
+    return Array.isArray(raw) ? raw : [];
+  }, [data]);
+
+  const columns: string[] = useMemo(() => {
+    const rawColumns = data?.result?.columns;
+    if (Array.isArray(rawColumns) && rawColumns.length > 0) {
+      return rawColumns.map((column: unknown) => String(column));
+    }
+    return rows.length > 0 ? Object.keys(rows[0]) : [];
+  }, [data, rows]);
+
+  const filteredRows = useMemo(() => {
+    const term = filterText.trim().toLowerCase();
+    if (!term) return rows;
+    return rows.filter((row) =>
+      Object.values(row).some((value) =>
+        String(value ?? "").toLowerCase().includes(term)
+      )
+    );
+  }, [rows, filterText]);
+
+  const visibleRows =
+    pageSize > 0 ? filteredRows.slice(0, pageSize) : filteredRows;
+
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-600">جاري تحميل التقرير...</p>
-        </div>
+      <div className="stack">
+        <PageHeader
+          title="تنفيذ تقرير"
+          subtitle="جاري تحميل نتائج التنفيذ…"
+          backTo="/reports"
+          backLabel="رجوع إلى التقارير"
+        />
+        <section className="card">
+          <div className="card-head">
+            <h2 className="card-title">نتائج التقرير</h2>
+          </div>
+          <div className="table-wrap">
+            <table className="data-table data-table--dense">
+              <thead>
+                <tr>
+                  {Array.from({ length: 4 }, (_, index) => (
+                    <th key={index} scope="col">
+                      <span className="sr-only">عمود</span>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <TableSkeleton rows={6} cols={4} widths={[160, 120, 90, 70]} />
+              </tbody>
+            </table>
+          </div>
+        </section>
       </div>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
-        <div className="bg-white p-8 rounded-xl shadow border border-red-100 max-w-md text-center">
-          <div className="text-red-600 font-bold mb-2">⚠️ حدث خطأ</div>
-          <p className="text-gray-600 text-sm mb-4">{error instanceof Error ? error.message : "التقرير غير موجود"}</p>
-          <button
-            onClick={() => navigate("/reports")}
-            className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700"
+      <div className="stack">
+        <PageHeader
+          title="تنفيذ تقرير"
+          backTo="/reports"
+          backLabel="رجوع إلى التقارير"
+        />
+        <ErrorState
+          title="حدث خطأ"
+          message={
+            error instanceof Error ? error.message : "التقرير غير موجود"
+          }
+          onRetry={() => refetch()}
+        />
+        <div>
+          <a
+            className="btn btn-ghost"
+            href="/reports"
+            onClick={(event) => {
+              event.preventDefault();
+              navigate("/reports");
+            }}
           >
             العودة إلى التقارير
-          </button>
+          </a>
         </div>
       </div>
     );
   }
 
+  const isRunning = data.status === "running";
+  const statusTone =
+    data.status === "completed"
+      ? "ok"
+      : data.status === "running"
+        ? "warn"
+        : "danger";
+  const statusLabel =
+    data.status === "completed"
+      ? "مكتمل"
+      : data.status === "running"
+        ? "جاري التنفيذ"
+        : "فشل";
+
+  const noRows = !isRunning && rows.length === 0;
+  const noMatches = !isRunning && rows.length > 0 && filteredRows.length === 0;
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <button
-          onClick={() => navigate("/reports")}
-          className="text-primary-600 hover:text-primary-800 flex items-center gap-2"
-        >
-          <ArrowLeft size={18} /> العودة إلى التقارير
-        </button>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">تقرير: {data.reportDefinition.name}</h1>
-          <p className="text-gray-600">رقم التقرير: #{data.id}</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
-          <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">حالة التقرير</h3>
-          <div className="flex items-center gap-3">
-            <span
-              className={`px-2 py-1 rounded-full text-xs font-medium ${
-                data.status === "completed"
-                  ? "bg-green-100 text-green-700"
-                  : data.status === "running"
-                  ? "bg-blue-100 text-blue-700"
-                  : "bg-red-100 text-red-700"
-              }`}
-            >
-              {data.status === "completed" ? "مكتمل" : data.status === "running" ? "جاري التنفيذ" : "فشل"}
-            </span>
-            <span className="text-xs text-gray-500">{new Date(data.startedAt).toLocaleString("ar-SA")}</span>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
-          <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">السجلات المسترجعة</h3>
-          <div className="text-2xl font-bold text-gray-800">{data.rowCount}</div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
-          <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">وقت التنفيذ</h3>
-          <div className="text-2xl font-bold text-gray-800">
-            {data.executionTimeMs ? `${data.executionTimeMs} مللي ثانية` : "غير محدد"}
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">بيانات التقرير</h3>
-          <div className="flex gap-2">
+    <div className="stack">
+      <PageHeader
+        title={`تقرير: ${data.reportDefinition.name}`}
+        subtitle={
+          <>
+            رقم التقرير: #{data.id} · <Pill tone={statusTone}>{statusLabel}</Pill>
+          </>
+        }
+        backTo="/reports"
+        backLabel="رجوع إلى التقارير"
+        actions={
+          <>
             <button
-              onClick={() => {
-                const dataStr = JSON.stringify(data.result, null, 2);
-                const blob = new Blob([dataStr], { type: "application/json" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `report-${data.reportDefinition.name}-${new Date().toISOString().slice(0, 10)}.json`;
-                a.click();
-                URL.revokeObjectURL(url);
-                toast.success("تم تنزيل التقرير بصيغة JSON");
-              }}
-              className="bg-primary-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 transition flex items-center gap-1"
+              type="button"
+              className="btn btn-primary"
+              onClick={downloadJson}
             >
-              <Download size={16} /> تحميل JSON
+              <Download aria-hidden="true" />
+              تحميل JSON
             </button>
             <button
+              type="button"
+              className="btn btn-ghost"
               onClick={() =>
-                downloadExport("csv", data.reportDefinition.id, data.reportDefinition.name)
+                downloadExport(
+                  "csv",
+                  data.reportDefinition.id,
+                  data.reportDefinition.name
+                )
               }
               disabled={exporting !== null}
-              className="bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition flex items-center gap-1 disabled:opacity-60"
             >
-              <Table size={16} /> {exporting === "csv" ? "جارٍ التصدير..." : "CSV"}
+              <Table aria-hidden="true" />
+              {exporting === "csv" ? "جارٍ التصدير…" : "CSV"}
             </button>
             <button
+              type="button"
+              className="btn btn-ghost"
               onClick={() =>
-                downloadExport("xlsx", data.reportDefinition.id, data.reportDefinition.name)
+                downloadExport(
+                  "xlsx",
+                  data.reportDefinition.id,
+                  data.reportDefinition.name
+                )
               }
               disabled={exporting !== null}
-              className="bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-emerald-800 transition flex items-center gap-1 disabled:opacity-60"
             >
-              <FileSpreadsheet size={16} /> {exporting === "xlsx" ? "جارٍ التصدير..." : "Excel"}
+              <FileSpreadsheet aria-hidden="true" />
+              {exporting === "xlsx" ? "جارٍ التصدير…" : "Excel"}
             </button>
             <button
+              type="button"
+              className="btn btn-ghost"
               onClick={() =>
-                downloadExport("pdf", data.reportDefinition.id, data.reportDefinition.name)
+                downloadExport(
+                  "pdf",
+                  data.reportDefinition.id,
+                  data.reportDefinition.name
+                )
               }
               disabled={exporting !== null}
-              className="bg-red-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition flex items-center gap-1 disabled:opacity-60"
             >
-              <FileText size={16} /> {exporting === "pdf" ? "جارٍ التصدير..." : "PDF عربي"}
+              <FileText aria-hidden="true" />
+              {exporting === "pdf" ? "جارٍ التصدير…" : "PDF عربي"}
             </button>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                {data.result?.data?.length > 0 ? (
-                  Object.keys(data.result.data[0]).map((key) => (
-                    <th key={key} className="px-4 py-3 font-semibold text-gray-700">
-                      {key}
-                    </th>
-                  ))
-                ) : (
-                  <th className="px-4 py-3 text-gray-500">لا توجد بيانات</th>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {(data.result?.data || []).map((row: any, index: number) => (
-                <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
-                  {Object.values(row).map((value, idx) => (
-                    <td key={idx} className="px-4 py-3 text-gray-600">
-                      {value === null || value === undefined ? "-" : String(value)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-              {data.result?.data?.length === 0 && (
-                <tr>
-                  <td className="px-4 py-3 text-gray-500 text-center" colSpan={Object.keys(data.result?.data?.[0] || {}).length}>
-                    لا توجد بيانات معروضة
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {data.errorMessage && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <h3 className="text-sm font-bold text-red-700 mb-2">خطأ في التنفيذ</h3>
-          <p className="text-sm text-red-600">{data.errorMessage}</p>
+        <div className="alert alert-danger" role="alert">
+          <AlertCircle aria-hidden="true" />
+          <div>
+            <strong>خطأ في التنفيذ.</strong> {data.errorMessage}
+          </div>
         </div>
       )}
+
+      <section className="card">
+        <div className="form-section-head">
+          <span className="form-section-num" aria-hidden="true">
+            1
+          </span>
+          <h2 className="form-section-title">معايير العرض</h2>
+          <span className="form-section-note">
+            تصفية الصفوف المعروضة دون إعادة تنفيذ التقرير
+          </span>
+        </div>
+        <div className="form-body">
+          <div className="field">
+            <label className="label" htmlFor="result-filter">
+              بحث في النتائج
+            </label>
+            <input
+              className="input"
+              id="result-filter"
+              type="search"
+              value={filterText}
+              onChange={(e) => setFilterText(e.target.value)}
+              placeholder="ابحث في قيم الصفوف…"
+              spellCheck={false}
+            />
+            <span className="hint">
+              يطابق أي قيمة في الصفوف المسترجعة.
+            </span>
+          </div>
+
+          <div className="field">
+            <label className="label" htmlFor="result-page-size">
+              عدد الصفوف المعروضة
+            </label>
+            <select
+              className="select"
+              id="result-page-size"
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+            >
+              {PAGE_SIZES.map((size) => (
+                <option key={size} value={size}>
+                  {size} صف
+                </option>
+              ))}
+              <option value={0}>كل الصفوف</option>
+            </select>
+            <span className="hint">
+              إجمالي الصفوف المسترجعة: {formatNumber(rows.length)}.
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <section className="card">
+        <div className="card-head">
+          <h2 className="card-title">نتائج التقرير</h2>
+          <span className="card-sub" aria-live="polite">
+            {isRunning
+              ? "جاري التنفيذ…"
+              : `عرض ${formatNumber(visibleRows.length)} من ${formatNumber(
+                  filteredRows.length
+                )} صف`}
+          </span>
+        </div>
+
+        {!noRows && !noMatches && (
+          <div className="table-wrap">
+            <table className="data-table data-table--dense">
+              <thead>
+                <tr>
+                  {columns.length > 0 ? (
+                    columns.map((column) => (
+                      <th key={column} scope="col">
+                        {column}
+                      </th>
+                    ))
+                  ) : (
+                    <th scope="col">لا توجد بيانات</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {isRunning && (
+                  <TableSkeleton
+                    rows={5}
+                    cols={Math.max(columns.length, 3)}
+                    widths={[160, 120, 90, 70, 60]}
+                  />
+                )}
+
+                {!isRunning &&
+                  visibleRows.map((row, index) => (
+                    <tr key={index}>
+                      {columns.map((column) => {
+                        const value = row[column];
+                        return (
+                          <td key={column}>
+                            {value === null || value === undefined
+                              ? "—"
+                              : String(value)}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {noRows && (
+          <EmptyState
+            icon={Table}
+            title="لا توجد بيانات معروضة"
+            text="لم يُرجع التقرير أي صفوف. راجع تعريف التقرير أو أعد تشغيله."
+          />
+        )}
+
+        {noMatches && (
+          <EmptyState
+            icon={SearchX}
+            title="لا نتائج مطابقة"
+            text={`لا يوجد صف يطابق «${filterText.trim()}». جرّب مصطلحاً آخر.`}
+            action={
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setFilterText("")}
+              >
+                مسح البحث
+              </button>
+            }
+          />
+        )}
+      </section>
     </div>
   );
 }

@@ -1,23 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import api from "@/services/api";
 import { toast } from "sonner";
-import {
-  Edit,
-  Trash2,
-  Eye,
-  Plus,
-  Search,
-  X,
-  Inbox,
-  AlertCircle,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import { Edit, Trash2, Eye, Plus, X, SearchX, Users } from "lucide-react";
 import type { Person, PaginatedResponse } from "@/types";
 import { useAuthStore } from "@/store/authStore";
 import { avatarTone, formatDate, formatNumber, initials } from "@/lib/format";
+import PageHeader from "@/components/ui/PageHeader";
+import Pagination from "@/components/ui/Pagination";
+import SearchInput from "@/components/ui/SearchInput";
+import { EmptyState, ErrorState, TableSkeleton } from "@/components/ui/StateViews";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useListParams } from "@/hooks/useListParams";
 
 interface CountryOption {
   id: number;
@@ -26,29 +21,15 @@ interface CountryOption {
 
 const PAGE_SIZES = [10, 25, 50];
 
-/** أرقام صفحات مختصرة حول الصفحة الحالية. */
-function pageWindow(current: number, total: number): (number | "gap")[] {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-  const pages = new Set<number>([1, total, current]);
-  if (current - 1 > 1) pages.add(current - 1);
-  if (current + 1 < total) pages.add(current + 1);
-  const sorted = [...pages].sort((a, b) => a - b);
-  const out: (number | "gap")[] = [];
-  sorted.forEach((page, index) => {
-    if (index > 0 && page - sorted[index - 1] > 1) out.push("gap");
-    out.push(page);
-  });
-  return out;
-}
-
 export default function Persons() {
-  const [searchParams] = useSearchParams();
-  const initialQuery = searchParams.get("q") ?? "";
+  const { q, page, limit, setQ, setPage, setLimit } = useListParams({
+    defaultLimit: PAGE_SIZES[0],
+  });
 
-  const [searchInput, setSearchInput] = useState(initialQuery);
-  const [search, setSearch] = useState(initialQuery);
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(PAGE_SIZES[0]);
+  const [searchInput, setSearchInput] = useState(q);
+  const debouncedInput = useDebouncedValue(searchInput, 300);
+  const search = q;
+
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [bulkConfirm, setBulkConfirm] = useState(false);
@@ -58,22 +39,16 @@ export default function Persons() {
   const { user } = useAuthStore();
   const isAdmin = user?.role === "admin";
 
-  // البحث من الشريط العلوي يصل عبر ?q=
+  // إدخال المستخدم ← عنوان URL (بعد توقّف الكتابة)
   useEffect(() => {
-    const next = searchParams.get("q") ?? "";
-    setSearchInput(next);
-    setSearch(next);
-    setPage(1);
-  }, [searchParams]);
+    const next = debouncedInput.trim();
+    if (next !== q) setQ(next);
+  }, [debouncedInput, q, setQ]);
 
-  // تأخير بسيط حتى لا يُطلق كل حرف طلباً
+  // تغيّر خارجي (شريط البحث العلوي أو زر الرجوع) ← حقل البحث
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setSearch(searchInput.trim());
-      setPage(1);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchInput]);
+    setSearchInput(q);
+  }, [q]);
 
   const { data, isLoading, isFetching, error, refetch } = useQuery<
     PaginatedResponse<Person>
@@ -166,18 +141,21 @@ export default function Persons() {
   const from = total === 0 ? 0 : (page - 1) * limit + 1;
   const to = Math.min(page * limit, total);
 
+  const clearSearch = () => {
+    setSearchInput("");
+    setQ("");
+  };
+
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1 className="page-title">الموظفون</h1>
-          <p className="page-sub">
-            {isLoading
-              ? "جاري تحميل السجلات…"
-              : `${formatNumber(total)} سجل موظف في النظام`}
-          </p>
-        </div>
-        <div className="head-actions">
+      <PageHeader
+        title="الموظفون"
+        subtitle={
+          isLoading
+            ? "جاري تحميل السجلات…"
+            : `${formatNumber(total)} سجل موظف في النظام`
+        }
+        actions={
           <a
             className="btn btn-primary"
             href="/persons/new"
@@ -189,41 +167,26 @@ export default function Persons() {
             <Plus aria-hidden="true" />
             إضافة موظف
           </a>
-        </div>
-      </div>
+        }
+      />
 
       {error && (
-        <div className="alert alert-danger" role="alert" style={{ marginBottom: 18 }}>
-          <AlertCircle aria-hidden="true" />
-          <div>
-            <strong>تعذّر تحميل السجلات.</strong>{" "}
-            {error instanceof Error ? error.message : String(error)}
-            <div style={{ marginTop: 8 }}>
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                onClick={() => refetch()}
-              >
-                إعادة المحاولة
-              </button>
-            </div>
-          </div>
+        <div style={{ marginBottom: 18 }}>
+          <ErrorState
+            message={error instanceof Error ? error.message : String(error)}
+            onRetry={() => refetch()}
+          />
         </div>
       )}
 
       <section className="card">
         <div className="toolbar">
-          <div className="input-wrap filter">
-            <Search aria-hidden="true" />
-            <input
-              className="input"
-              type="search"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="ابحث بالاسم أو رقم السجل…"
-              aria-label="بحث في الموظفين"
-            />
-          </div>
+          <SearchInput
+            value={searchInput}
+            onChange={setSearchInput}
+            placeholder="ابحث بالاسم أو رقم السجل…"
+            label="بحث في الموظفين"
+          />
 
           <select
             className="select"
@@ -239,14 +202,7 @@ export default function Persons() {
           </select>
 
           {(search || searchInput) && (
-            <button
-              type="button"
-              className="clear-link"
-              onClick={() => {
-                setSearchInput("");
-                setSearch("");
-              }}
-            >
+            <button type="button" className="clear-link" onClick={clearSearch}>
               مسح البحث
             </button>
           )}
@@ -258,10 +214,7 @@ export default function Persons() {
                 <button
                   type="button"
                   aria-label="إزالة فلتر البحث"
-                  onClick={() => {
-                    setSearchInput("");
-                    setSearch("");
-                  }}
+                  onClick={clearSearch}
                 >
                   <X aria-hidden="true" />
                 </button>
@@ -351,31 +304,9 @@ export default function Persons() {
               </tr>
             </thead>
             <tbody>
-              {isLoading &&
-                [0, 1, 2, 3, 4].map((row) => (
-                  <tr key={`skeleton-${row}`}>
-                    <td className="col-check" />
-                    <td>
-                      <div className="cell-person">
-                        <span
-                          className="skeleton"
-                          style={{ width: 30, height: 30, borderRadius: "50%" }}
-                        />
-                        <span className="skeleton" style={{ width: 160 }} />
-                      </div>
-                    </td>
-                    <td className="col-optional">
-                      <span className="skeleton" style={{ width: 70 }} />
-                    </td>
-                    <td className="col-optional">
-                      <span className="skeleton" style={{ width: 70 }} />
-                    </td>
-                    <td className="col-compact">
-                      <span className="skeleton" style={{ width: 90 }} />
-                    </td>
-                    <td className="col-actions" />
-                  </tr>
-                ))}
+              {isLoading && (
+                <TableSkeleton rows={5} cols={6} widths={[18, 160, 70, 70, 90, 0]} />
+              )}
 
               {!isLoading &&
                 rows.map((person) => {
@@ -500,85 +431,43 @@ export default function Persons() {
         </div>
 
         {!isLoading && rows.length === 0 && (
-          <div className="state">
-            <span className="state-icon" aria-hidden="true">
-              <Inbox />
-            </span>
-            <span className="state-title">
-              {search ? "لا نتائج مطابقة" : "لا يوجد موظفون بعد"}
-            </span>
-            <span className="state-text">
-              {search
+          <EmptyState
+            icon={search ? SearchX : Users}
+            title={search ? "لا نتائج مطابقة" : "لا يوجد موظفون بعد"}
+            text={
+              search
                 ? `لم نجد سجلاً يطابق «${search}». جرّب جزءاً من الاسم أو امسح البحث.`
-                : "ابدأ بتسجيل أول موظف ليظهر في القوائم والتقارير."}
-            </span>
-            {search ? (
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                onClick={() => {
-                  setSearchInput("");
-                  setSearch("");
-                }}
-              >
-                مسح البحث
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                onClick={() => navigate("/persons/new")}
-              >
-                <Plus aria-hidden="true" />
-                إضافة موظف
-              </button>            )}
-          </div>
+                : "ابدأ بتسجيل أول موظف ليظهر في القوائم والتقارير."
+            }
+            action={
+              search ? (
+                <button type="button" className="btn btn-ghost btn-sm" onClick={clearSearch}>
+                  مسح البحث
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => navigate("/persons/new")}
+                >
+                  <Plus aria-hidden="true" />
+                  إضافة موظف
+                </button>
+              )
+            }
+          />
         )}
 
         {!isLoading && rows.length > 0 && (
-          <div className="table-foot">
-            <span aria-live="polite">
-              عرض {formatNumber(from)}–{formatNumber(to)} من {formatNumber(total)}
-              {isFetching && " · جاري التحديث…"}
-            </span>
-            <div className="pager">
-              <button
-                type="button"
-                className="pg"
-                aria-label="الصفحة السابقة"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                <ChevronRight aria-hidden="true" />
-              </button>
-              {pageWindow(page, Math.max(1, totalPages)).map((item, index) =>
-                item === "gap" ? (
-                  <span key={`gap-${index}`} className="pg" aria-hidden="true">
-                    …
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    key={item}
-                    className={`pg${item === page ? " is-current" : ""}`}
-                    aria-current={item === page ? "page" : undefined}
-                    onClick={() => setPage(item)}
-                  >
-                    {formatNumber(item)}
-                  </button>
-                )
-              )}
-              <button
-                type="button"
-                className="pg"
-                aria-label="الصفحة التالية"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              >
-                <ChevronLeft aria-hidden="true" />
-              </button>
-            </div>
-          </div>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            from={from}
+            to={to}
+            onPage={setPage}
+            isFetching={isFetching}
+          />
         )}
       </section>
     </>

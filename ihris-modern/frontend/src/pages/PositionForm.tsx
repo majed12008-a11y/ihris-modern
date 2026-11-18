@@ -3,8 +3,10 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/services/api";
 import { toast } from "sonner";
-import { Save, ArrowLeft } from "lucide-react";
+import { AlertCircle, Save } from "lucide-react";
 import { Position } from "@/types";
+import PageHeader from "@/components/ui/PageHeader";
+import { ErrorState, LoadingState } from "@/components/ui/StateViews";
 
 interface PositionFormData {
   code: string;
@@ -16,6 +18,39 @@ interface PositionFormData {
   proposedSalary: string;
   statusId: string;
 }
+
+interface Option {
+  value: string;
+  label: string;
+}
+
+const JOB_OPTIONS: Option[] = [
+  { value: "1", label: "طبيب عام" },
+  { value: "2", label: "ممرض" },
+  { value: "3", label: "صيدلي" },
+  { value: "4", label: "إداري" },
+];
+
+const FACILITY_OPTIONS: Option[] = [
+  { value: "1", label: "مستشفى صنعاء العام" },
+  { value: "2", label: "مركز صحي عدن" },
+  { value: "3", label: "عيادة متخصصة" },
+];
+
+const DEPARTMENT_OPTIONS: Option[] = [
+  { value: "1", label: "الإدارة" },
+  { value: "2", label: "الطب العام" },
+  { value: "3", label: "جراحة العظام" },
+];
+
+const STATUS_OPTIONS: Option[] = [
+  { value: "1", label: "شاغر" },
+  { value: "2", label: "مشغول" },
+  { value: "3", label: "تحت الإجراء" },
+];
+
+const labelOf = (options: Option[], value: string) =>
+  value ? options.find((option) => option.value === value)?.label ?? "—" : "—";
 
 export default function PositionForm() {
   const { id } = useParams();
@@ -34,8 +69,14 @@ export default function PositionForm() {
     proposedSalary: "",
     statusId: "",
   });
+  const [errors, setErrors] = useState<{ title?: string }>({});
 
-  const { data: position, isLoading } = useQuery<Position>({
+  const {
+    data: position,
+    isLoading,
+    error: loadError,
+    refetch,
+  } = useQuery<Position>({
     queryKey: ["position", positionId],
     queryFn: async () => {
       const res = await api.get(`/positions/${positionId}`);
@@ -89,8 +130,22 @@ export default function PositionForm() {
     },
   });
 
+  const saving = updateMutation.isPending || createMutation.isPending;
+
+  const set = (key: keyof PositionFormData, value: string) => {
+    setFormData((prev) => ({ ...prev, [key]: value }));
+    if (key === "title") setErrors((prev) => ({ ...prev, title: undefined }));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!formData.title.trim()) {
+      setErrors({ title: "المسمى الوظيفي مطلوب" });
+      document.getElementById("position-title")?.focus();
+      return;
+    }
+
     if (isEdit && positionId) {
       updateMutation.mutate(formData);
     } else {
@@ -98,181 +153,326 @@ export default function PositionForm() {
     }
   };
 
-  if (isLoading && positionId) return <div className="p-6">جاري التحميل...</div>;
+  const backTo = isEdit ? `/positions/${positionId}` : "/positions";
+
+  if (isEdit && isLoading) {
+    return (
+      <div className="stack">
+        <PageHeader
+          title="تعديل وظيفة"
+          subtitle="تعديل بيانات الوظيفة المحددة"
+          backTo={backTo}
+          backLabel="العودة"
+        />
+        <section className="card">
+          <LoadingState label="جاري تحميل بيانات الوظيفة…" />
+        </section>
+      </div>
+    );
+  }
+
+  if (isEdit && loadError) {
+    return (
+      <div className="stack">
+        <PageHeader
+          title="تعديل وظيفة"
+          subtitle="تعديل بيانات الوظيفة المحددة"
+          backTo="/positions"
+          backLabel="رجوع إلى الوظائف"
+        />
+        <ErrorState
+          title="تعذّر تحميل الوظيفة"
+          message={
+            loadError instanceof Error ? loadError.message : "الوظيفة غير موجودة"
+          }
+          onRetry={() => refetch()}
+        />
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <button
-          onClick={() =>
-            navigate(isEdit ? `/positions/${positionId}` : "/positions")
-          }
-          className="text-primary-600 hover:text-primary-800 flex items-center gap-2"
+    <div className="stack">
+      <PageHeader
+        title={isEdit ? "تعديل وظيفة" : "إضافة وظيفة جديدة"}
+        subtitle={
+          isEdit
+            ? "تعديل بيانات الوظيفة المحددة"
+            : "إدخال وظيفة جديدة في الهيكل التنظيمي"
+        }
+        backTo={backTo}
+        backLabel="العودة"
+      />
+
+      <div className="form-layout">
+        <form
+          id="position-form"
+          className="main-col form-stack"
+          onSubmit={handleSubmit}
+          noValidate
         >
-          <ArrowLeft size={18} /> العودة
-        </button>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">
-            {isEdit ? "تعديل وظيفة" : "إضافة وظيفة جديدة"}
-          </h1>
-          <p className="text-gray-600">
-            {isEdit
-              ? "تعديل بيانات الوظيفة المحددة"
-              : "إدخال وظيفة جديدة في الهيكل التنظيمي"}
-          </p>
-        </div>
-      </div>
-
-      <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div className="col-span-lg-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                كود الوظيفة
-              </label>
-              <input
-                type="text"
-                value={formData.code}
-                onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                placeholder="مثل: POS-001"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-              />
+          <section className="card">
+            <div className="form-section-head">
+              <span className="form-section-num" aria-hidden="true">
+                1
+              </span>
+              <h2 className="form-section-title">بيانات الوظيفة</h2>
+              <span className="form-section-note">كما في الهيكل التنظيمي</span>
             </div>
+            <div className="form-body">
+              <div className="field">
+                <label className="label" htmlFor="position-code">
+                  كود الوظيفة
+                </label>
+                <input
+                  className="input"
+                  id="position-code"
+                  name="code"
+                  type="text"
+                  value={formData.code}
+                  onChange={(e) => set("code", e.target.value)}
+                  placeholder="مثل: POS-001"
+                  spellCheck={false}
+                />
+              </div>
 
-            <div className="col-span-lg-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                المسمى الوظيفي *
-              </label>
-              <input
-                type="text"
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                required
-              />
+              <div className="field">
+                <label className="label" htmlFor="position-title">
+                  المسمى الوظيفي <span className="req">*</span>
+                </label>
+                <input
+                  className={`input${errors.title ? " is-invalid" : ""}`}
+                  id="position-title"
+                  name="title"
+                  type="text"
+                  value={formData.title}
+                  onChange={(e) => set("title", e.target.value)}
+                  aria-invalid={errors.title ? "true" : undefined}
+                  aria-describedby={errors.title ? "position-title-err" : undefined}
+                  required
+                />
+                {errors.title && (
+                  <p className="err" id="position-title-err">
+                    <AlertCircle aria-hidden="true" />
+                    {errors.title}
+                  </p>
+                )}
+              </div>
+
+              <div className="field">
+                <label className="label" htmlFor="position-salary">
+                  الراتب المقترح
+                </label>
+                <input
+                  className="input"
+                  id="position-salary"
+                  name="proposedSalary"
+                  type="text"
+                  value={formData.proposedSalary}
+                  onChange={(e) => set("proposedSalary", e.target.value)}
+                  placeholder="مثل: 150,000"
+                  inputMode="numeric"
+                />
+                <span className="hint">اختياري — يُستخدم في المقارنة مع سلّم الرواتب.</span>
+              </div>
+
+              <div className="field">
+                <label className="label" htmlFor="position-status">
+                  حالة المنصب
+                </label>
+                <select
+                  className="select"
+                  id="position-status"
+                  value={formData.statusId}
+                  onChange={(e) => set("statusId", e.target.value)}
+                >
+                  <option value="">اختر الحالة</option>
+                  {STATUS_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="field full">
+                <label className="label" htmlFor="position-description">
+                  الوصف
+                </label>
+                <textarea
+                  className="textarea"
+                  id="position-description"
+                  name="description"
+                  value={formData.description}
+                  onChange={(e) => set("description", e.target.value)}
+                />
+                <span className="hint">
+                  موجز المهام والمسؤوليات المرتبطة بهذه الوظيفة.
+                </span>
+              </div>
             </div>
+          </section>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                الراتب المقترح
-              </label>
-              <input
-                type="text"
-                value={formData.proposedSalary}
-                onChange={(e) =>
-                  setFormData({ ...formData, proposedSalary: e.target.value })
-                }
-                placeholder="مثل: 150,000"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-              />
+          <section className="card">
+            <div className="form-section-head">
+              <span className="form-section-num" aria-hidden="true">
+                2
+              </span>
+              <h2 className="form-section-title">التصنيف والربط</h2>
             </div>
+            <div className="form-body">
+              <div className="field">
+                <label className="label" htmlFor="position-job">
+                  المسمى الوظيفي (Job)
+                </label>
+                <select
+                  className="select"
+                  id="position-job"
+                  value={formData.jobId}
+                  onChange={(e) => set("jobId", e.target.value)}
+                >
+                  <option value="">اختر المسمى</option>
+                  {JOB_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            <div className="col-span-lg-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                الوصف
-              </label>
-              <textarea
-                value={formData.description}
-                onChange={(e) =>
-                  setFormData({ ...formData, description: e.target.value })
-                }
-                rows={3}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-              />
+              <div className="field">
+                <label className="label" htmlFor="position-facility">
+                  المنشأة
+                </label>
+                <select
+                  className="select"
+                  id="position-facility"
+                  value={formData.facilityId}
+                  onChange={(e) => set("facilityId", e.target.value)}
+                >
+                  <option value="">اختر المنشأة</option>
+                  {FACILITY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="field">
+                <label className="label" htmlFor="position-department">
+                  القسم
+                </label>
+                <select
+                  className="select"
+                  id="position-department"
+                  value={formData.departmentId}
+                  onChange={(e) => set("departmentId", e.target.value)}
+                >
+                  <option value="">اختر القسم</option>
+                  {DEPARTMENT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="field full">
+                <span className="hint">
+                  الربط بالمنشأة والقسم يحدّد مكان ظهور الوظيفة في الشواغر والتقارير.
+                </span>
+              </div>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                المسمى الوظيفي (Job)
-              </label>
-              <select
-                value={formData.jobId}
-                onChange={(e) => setFormData({ ...formData, jobId: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-              >
-                <option value="">اختر المسمى</option>
-                <option value="1">طبيب عام</option>
-                <option value="2">ممرض</option>
-                <option value="3">صيدلي</option>
-                <option value="4">إداري</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                المنشأة
-              </label>
-              <select
-                value={formData.facilityId}
-                onChange={(e) =>
-                  setFormData({ ...formData, facilityId: e.target.value })
-                }
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-              >
-                <option value="">اختر المنشأة</option>
-                <option value="1">مستشفى صنعاء العام</option>
-                <option value="2">مركز صحي عدن</option>
-                <option value="3">عيادة متخصصة</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                القسم
-              </label>
-              <select
-                value={formData.departmentId}
-                onChange={(e) =>
-                  setFormData({ ...formData, departmentId: e.target.value })
-                }
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-              >
-                <option value="">اختر القسم</option>
-                <option value="1">الإدارة</option>
-                <option value="2">الطب العام</option>
-                <option value="3">جراحة العظام</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                حالة المنصب
-              </label>
-              <select
-                value={formData.statusId}
-                onChange={(e) => setFormData({ ...formData, statusId: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-              >
-                <option value="">اختر الحالة</option>
-                <option value="1">شاغر</option>
-                <option value="2">مشغول</option>
-                <option value="3">تحت الإجراء</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="flex gap-3 pt-4 border-t border-gray-100">
-            <button
-              type="submit"
-              disabled={
-                updateMutation.isPending || createMutation.isPending
-              }
-              className="bg-primary-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-primary-700 disabled:opacity-60 flex items-center gap-2 transition"
-            >
-              <Save size={18} />
-              {isEdit ? "تحديث البيانات" : "حفظ الوظيفة"}
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                navigate(isEdit ? `/positions/${positionId}` : "/positions")
-              }
-              className="bg-gray-100 text-gray-700 px-6 py-3 rounded-lg font-medium hover:bg-gray-200 transition"
-            >
-              إلغاء
-            </button>
-          </div>
+          </section>
         </form>
+
+        <aside className="side">
+          <section className="card">
+            <div className="card-head">
+              <h2 className="card-title">ملخّص الوظيفة</h2>
+            </div>
+            <div className="card-body">
+              <div className="summary-row">
+                <span className="summary-key">الكود</span>
+                <span className={`summary-val${formData.code ? "" : " empty"}`}>
+                  {formData.code || "غير محدد"}
+                </span>
+              </div>
+              <div className="summary-row">
+                <span className="summary-key">المسمى الوظيفي</span>
+                <span
+                  className={`summary-val${formData.title.trim() ? "" : " empty"}`}
+                >
+                  {formData.title.trim() || "غير مكتمل"}
+                </span>
+              </div>
+              <div className="summary-row">
+                <span className="summary-key">الحالة</span>
+                <span
+                  className={`summary-val${formData.statusId ? "" : " empty"}`}
+                >
+                  {labelOf(STATUS_OPTIONS, formData.statusId)}
+                </span>
+              </div>
+              <div className="summary-row">
+                <span className="summary-key">المنشأة</span>
+                <span
+                  className={`summary-val${formData.facilityId ? "" : " empty"}`}
+                >
+                  {labelOf(FACILITY_OPTIONS, formData.facilityId)}
+                </span>
+              </div>
+              <div className="summary-row">
+                <span className="summary-key">القسم</span>
+                <span
+                  className={`summary-val${formData.departmentId ? "" : " empty"}`}
+                >
+                  {labelOf(DEPARTMENT_OPTIONS, formData.departmentId)}
+                </span>
+              </div>
+              <div className="summary-row">
+                <span className="summary-key">الراتب المقترح</span>
+                <span
+                  className={`summary-val${formData.proposedSalary ? "" : " empty"}`}
+                >
+                  {formData.proposedSalary || "غير محدد"}
+                </span>
+              </div>
+            </div>
+          </section>
+
+          <section className="card">
+            <div
+              className="card-body"
+              style={{ display: "flex", flexDirection: "column", gap: 9 }}
+            >
+              <button
+                type="submit"
+                form="position-form"
+                className="btn btn-primary btn-block"
+                disabled={saving}
+              >
+                <Save aria-hidden="true" />
+                {saving
+                  ? "جاري الحفظ…"
+                  : isEdit
+                  ? "تحديث البيانات"
+                  : "حفظ الوظيفة"}
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost btn-block"
+                onClick={() => navigate(backTo)}
+              >
+                إلغاء
+              </button>
+              <p className="side-note">
+                الحقول المعلّمة بـ <span className="req">*</span> إلزامية.
+              </p>
+            </div>
+          </section>
+        </aside>
       </div>
     </div>
   );

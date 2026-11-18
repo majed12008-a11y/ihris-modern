@@ -36,10 +36,17 @@ import SalarySources from "@/pages/SalarySources";
 
 function LoadingSpinner() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="flex flex-col items-center gap-4">
-        <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin" />
-        <p className="text-gray-600">جاري التحقق من الجلسة...</p>
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "grid",
+        placeItems: "center",
+        background: "var(--paper)",
+      }}
+    >
+      <div className="state" role="status" aria-live="polite">
+        <span className="spinner" aria-hidden="true" />
+        <span className="state-text">جارٍ التحقق من الجلسة…</span>
       </div>
     </div>
   );

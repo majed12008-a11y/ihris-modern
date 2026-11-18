@@ -1,20 +1,19 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/services/api";
 import { useAuthStore } from "@/store/authStore";
 import { toast } from "sonner";
-import {
-  Plus,
-  Pencil,
-  Trash2,
-  Eye,
-  Search,
-  ChevronRight,
-  ChevronLeft,
-  AlertTriangle,
-  Building2,
-} from "lucide-react";
+import { Building2, Eye, Pencil, Plus, SearchX, Trash2, X } from "lucide-react";
+import { formatNumber } from "@/lib/format";
+import PageHeader from "@/components/ui/PageHeader";
+import SearchInput from "@/components/ui/SearchInput";
+import Pagination from "@/components/ui/Pagination";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import Pill from "@/components/ui/Pill";
+import { EmptyState, ErrorState, TableSkeleton } from "@/components/ui/StateViews";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useListParams } from "@/hooks/useListParams";
 
 interface FacilityRow {
   id: number;
@@ -36,7 +35,7 @@ interface FacilityListResponse {
   totalPages: number;
 }
 
-const PAGE_SIZE = 20;
+const PAGE_SIZES = [10, 20, 50];
 
 export default function Facilities() {
   const navigate = useNavigate();
@@ -45,17 +44,39 @@ export default function Facilities() {
   const canWrite = currentUser?.role === "admin" || currentUser?.role === "hr_manager";
   const isAdmin = currentUser?.role === "admin";
 
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
+  const { q, page, limit, setQ, setPage, setLimit } = useListParams({
+    defaultLimit: 20,
+  });
+
+  const [searchInput, setSearchInput] = useState(q);
+  const debouncedInput = useDebouncedValue(searchInput, 300);
+  const search = q;
+
   const [deleteTarget, setDeleteTarget] = useState<FacilityRow | null>(null);
 
-  const { data, isLoading, error } = useQuery<FacilityListResponse>({
-    queryKey: ["facilities", search, page],
+  // إدخال المستخدم ← عنوان URL (بعد توقّف الكتابة)
+  useEffect(() => {
+    const next = debouncedInput.trim();
+    if (next !== q) setQ(next);
+  }, [debouncedInput, q, setQ]);
+
+  // تغيّر خارجي (زر الرجوع أو شريط البحث العلوي) ← حقل البحث
+  useEffect(() => {
+    setSearchInput(q);
+  }, [q]);
+
+  // إعادة ضبط التأكيد عند تغيّر النتائج
+  useEffect(() => {
+    setDeleteTarget(null);
+  }, [search, page, limit]);
+
+  const { data, isLoading, isFetching, error, refetch } = useQuery<FacilityListResponse>({
+    queryKey: ["facilities", search, page, limit],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       params.set("page", String(page));
-      params.set("limit", String(PAGE_SIZE));
+      params.set("limit", String(limit));
       const res = await api.get(`/facilities?${params.toString()}`);
       return res.data;
     },
@@ -77,207 +98,263 @@ export default function Facilities() {
     },
   });
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-600">جاري تحميل المنشآت...</p>
-        </div>
-      </div>
-    );
-  }
+  const rows = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 1;
+  const from = total === 0 ? 0 : (page - 1) * limit + 1;
+  const to = Math.min(page * limit, total);
 
-  if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
-        <div className="bg-white p-8 rounded-xl shadow border border-red-100 max-w-md text-center">
-          <div className="text-red-600 font-bold mb-2">⚠️ حدث خطأ في تحميل البيانات</div>
-          <p className="text-gray-600 text-sm mb-4">
-            {error instanceof Error ? error.message : String(error)}
-          </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700"
-          >
-            إعادة تحميل الصفحة
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const clearSearch = () => {
+    setSearchInput("");
+    setQ("");
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">إدارة المنشآت الصحية</h1>
-          <p className="text-gray-600">عرض وإدارة المنشآت المرتبطة بالوظائف والموظفين</p>
-        </div>
-        {canWrite && (
-          <button
-            onClick={() => navigate("/facilities/new")}
-            className="bg-primary-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium hover:bg-primary-700 transition"
-          >
-            <Plus size={18} /> منشأة جديدة
-          </button>
-        )}
-      </div>
-
-      <div className="bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-100">
-          <div className="relative md:w-96">
-            <Search
-              size={18}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
-            />
-            <input
-              type="text"
-              placeholder="البحث باسم المنشأة..."
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
+    <>
+      <PageHeader
+        title="إدارة المنشآت الصحية"
+        subtitle={
+          isLoading
+            ? "جاري تحميل المنشآت…"
+            : `${formatNumber(total)} منشأة مسجّلة — عرض وإدارة المنشآت المرتبطة بالوظائف والموظفين`
+        }
+        actions={
+          canWrite ? (
+            <a
+              className="btn btn-primary"
+              href="/facilities/new"
+              onClick={(event) => {
+                event.preventDefault();
+                navigate("/facilities/new");
               }}
-              className="w-full pr-10 pl-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-            />
-          </div>
+            >
+              <Plus aria-hidden="true" />
+              منشأة جديدة
+            </a>
+          ) : null
+        }
+      />
+
+      {error && (
+        <div style={{ marginBottom: 18 }}>
+          <ErrorState
+            message={error instanceof Error ? error.message : String(error)}
+            onRetry={() => refetch()}
+          />
+        </div>
+      )}
+
+      <section className="card">
+        <div className="toolbar">
+          <SearchInput
+            value={searchInput}
+            onChange={setSearchInput}
+            placeholder="البحث باسم المنشأة…"
+            label="بحث في المنشآت"
+          />
+
+          <select
+            className="select"
+            value={limit}
+            onChange={(event) => setLimit(Number(event.target.value))}
+            aria-label="عدد السجلات في الصفحة"
+          >
+            {PAGE_SIZES.map((size) => (
+              <option key={size} value={size}>
+                {size} في الصفحة
+              </option>
+            ))}
+          </select>
+
+          {(search || searchInput) && (
+            <button type="button" className="clear-link" onClick={clearSearch}>
+              مسح البحث
+            </button>
+          )}
+
+          {search && (
+            <div className="chips">
+              <span className="chip">
+                البحث: {search}
+                <button
+                  type="button"
+                  aria-label="إزالة فلتر البحث"
+                  onClick={clearSearch}
+                >
+                  <X aria-hidden="true" />
+                </button>
+              </span>
+            </div>
+          )}
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-gray-50 border-b border-gray-200">
+        <div className="table-wrap">
+          <table className="data-table data-table--dense">
+            <thead>
               <tr>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">المنشأة</th>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">النوع</th>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">الموقع</th>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">الوظائف</th>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">الإجراءات</th>
+                <th scope="col">المنشأة</th>
+                <th scope="col" className="col-optional">
+                  النوع
+                </th>
+                <th scope="col" className="col-optional">
+                  الموقع
+                </th>
+                <th scope="col" className="col-compact">
+                  الوظائف
+                </th>
+                <th scope="col">
+                  <span className="sr-only">إجراءات</span>
+                </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
-              {(data?.data || []).map((row) => (
-                <tr key={row.id} className="hover:bg-gray-50 transition">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="bg-primary-50 text-primary-600 p-2 rounded-lg">
-                        <Building2 size={18} />
-                      </div>
-                      <span className="font-medium text-gray-800">{row.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-gray-600 text-sm">
-                    {row.facilityType?.name || "—"}
-                  </td>
-                  <td className="px-6 py-4 text-gray-600 text-sm">
-                    {[row.country?.name, row.region?.name, row.district?.name, row.county?.name]
+            <tbody>
+              {isLoading && (
+                <TableSkeleton rows={6} cols={5} widths={[200, 90, 150, 50, 0]} />
+              )}
+
+              {!isLoading &&
+                rows.map((row) => {
+                  const location =
+                    [
+                      row.country?.name,
+                      row.region?.name,
+                      row.district?.name,
+                      row.county?.name,
+                    ]
                       .filter(Boolean)
-                      .join(" / ") || "—"}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                      {row.positionsCount}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => navigate(`/facilities/${row.id}`)}
-                        className="text-gray-600 hover:text-gray-800 p-1"
-                        title="عرض"
-                      >
-                        <Eye size={18} />
-                      </button>
-                      {canWrite && (
-                        <button
-                          onClick={() => navigate(`/facilities/${row.id}/edit`)}
-                          className="text-primary-600 hover:text-primary-800 p-1"
-                          title="تعديل"
-                        >
-                          <Pencil size={18} />
-                        </button>
-                      )}
-                      {isAdmin && (
-                        <button
-                          onClick={() => setDeleteTarget(row)}
-                          className="text-red-600 hover:text-red-800 p-1"
-                          title="حذف"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                      .join(" / ") || "—";
+
+                  return (
+                    <tr key={row.id}>
+                      <td>
+                        <div className="cell-person">
+                          <span className="avatar sm a1" aria-hidden="true">
+                            <Building2 size={15} />
+                          </span>
+                          <span className="person-meta">
+                            <span className="person-name">{row.name}</span>
+                            <span className="person-sub">
+                              منشأة رقم {row.id}
+                            </span>
+                          </span>
+                        </div>
+                      </td>
+                      <td className="col-optional">{row.facilityType?.name || "—"}</td>
+                      <td className="col-optional">{location}</td>
+                      <td className="col-compact">
+                        <Pill tone={row.positionsCount > 0 ? "ok" : "mute"}>
+                          {formatNumber(row.positionsCount)}
+                        </Pill>
+                      </td>
+                      <td className="col-actions">
+                        <div className="row-actions">
+                          <a
+                            className="icon-btn icon-btn--sm"
+                            href={`/facilities/${row.id}`}
+                            aria-label={`عرض ${row.name}`}
+                            title="عرض"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              navigate(`/facilities/${row.id}`);
+                            }}
+                          >
+                            <Eye aria-hidden="true" />
+                          </a>
+                          {canWrite && (
+                            <a
+                              className="icon-btn icon-btn--sm"
+                              href={`/facilities/${row.id}/edit`}
+                              aria-label={`تعديل ${row.name}`}
+                              title="تعديل"
+                              onClick={(event) => {
+                                event.preventDefault();
+                                navigate(`/facilities/${row.id}/edit`);
+                              }}
+                            >
+                              <Pencil aria-hidden="true" />
+                            </a>
+                          )}
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              className="icon-btn icon-btn--sm danger"
+                              aria-label={`حذف ${row.name}`}
+                              title="حذف"
+                              onClick={() => setDeleteTarget(row)}
+                            >
+                              <Trash2 aria-hidden="true" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
             </tbody>
           </table>
         </div>
 
-        {!data?.data?.length && (
-          <div className="text-center py-12 text-gray-500">لا توجد منشآت مطابقة</div>
+        {!isLoading && rows.length === 0 && (
+          <EmptyState
+            icon={search ? SearchX : Building2}
+            title={search ? "لا نتائج مطابقة" : "لا توجد منشآت بعد"}
+            text={
+              search
+                ? `لم نجد منشأة تطابق «${search}». جرّب جزءاً من الاسم أو امسح البحث.`
+                : "ابدأ بإضافة أول منشأة صحية لربط الوظائف والموظفين بها."
+            }
+            action={
+              search ? (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={clearSearch}
+                >
+                  مسح البحث
+                </button>
+              ) : canWrite ? (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => navigate("/facilities/new")}
+                >
+                  <Plus aria-hidden="true" />
+                  منشأة جديدة
+                </button>
+              ) : null
+            }
+          />
         )}
 
-        {data && data.totalPages > 1 && (
-          <div className="p-4 border-t border-gray-100 flex items-center justify-between text-sm">
-            <span className="text-gray-600">
-              صفحة {data.page} من {data.totalPages} — {data.total} منشأة
-            </span>
-            <div className="flex gap-2">
-              <button
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="px-3 py-1.5 border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50 flex items-center gap-1"
-              >
-                <ChevronRight size={16} /> السابق
-              </button>
-              <button
-                disabled={page >= data.totalPages}
-                onClick={() => setPage((p) => p + 1)}
-                className="px-3 py-1.5 border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50 flex items-center gap-1"
-              >
-                التالي <ChevronLeft size={16} />
-              </button>
-            </div>
-          </div>
+        {!isLoading && rows.length > 0 && (
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            from={from}
+            to={to}
+            onPage={setPage}
+            isFetching={isFetching}
+          />
         )}
-      </div>
+      </section>
 
-      {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 m-4">
-            <div className="flex items-start gap-3 mb-4">
-              <div className="bg-red-100 text-red-600 p-2 rounded-full">
-                <AlertTriangle size={22} />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-gray-800">حذف المنشأة</h2>
-                <p className="text-gray-600 text-sm mt-1">
-                  سيتم حذف <span className="font-bold">{deleteTarget.name}</span> نهائياً.
-                  لا يمكن الحذف إذا كانت مرتبطة بوظائف.
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-3 pt-4 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={() => setDeleteTarget(null)}
-                className="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg font-medium hover:bg-gray-200 transition"
-              >
-                إلغاء
-              </button>
-              <button
-                type="button"
-                disabled={deleteMutation.isPending}
-                onClick={() => deleteMutation.mutate(deleteTarget)}
-                className="bg-red-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-red-700 disabled:opacity-60 transition"
-              >
-                {deleteMutation.isPending ? "جاري الحذف..." : "تأكيد الحذف"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="حذف المنشأة"
+        text={
+          deleteTarget ? (
+            <>
+              سيتم حذف <strong>{deleteTarget.name}</strong> نهائياً. لا يمكن الحذف إذا
+              كانت مرتبطة بوظائف.
+            </>
+          ) : undefined
+        }
+        confirmLabel="تأكيد الحذف"
+        pending={deleteMutation.isPending}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+      />
+    </>
   );
 }

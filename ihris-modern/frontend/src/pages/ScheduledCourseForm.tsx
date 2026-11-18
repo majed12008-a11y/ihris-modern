@@ -4,7 +4,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/services/api";
 import { extractErrorMessages } from "@/lib/errorDetails";
 import { toast } from "sonner";
-import { Save, ArrowLeft, X, CalendarPlus } from "lucide-react";
+import { Save, X, AlertCircle, CalendarPlus } from "lucide-react";
+import PageHeader from "@/components/ui/PageHeader";
+import { ErrorState, LoadingState } from "@/components/ui/StateViews";
 
 /**
  * Sprint 6 / GAP-H-001 — نموذج الدورة المجدولة (إنشاء + تعديل).
@@ -78,6 +80,7 @@ export default function ScheduledCourseForm() {
   const [version, setVersion] = useState(1);
   const [currentStatus, setCurrentStatus] = useState("scheduled");
   const [errors, setErrors] = useState<string[]>([]);
+  const [dateError, setDateError] = useState<string | null>(null);
 
   const courseQuery = useQuery({
     queryKey: ["training-course", courseId],
@@ -146,7 +149,10 @@ export default function ScheduledCourseForm() {
 
   const set = (key: keyof ScheduledFormData) => (
     event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
-  ) => setFormData((prev) => ({ ...prev, [key]: event.target.value }));
+  ) => {
+    setFormData((prev) => ({ ...prev, [key]: event.target.value }));
+    if ((key === "startDate" || key === "endDate") && dateError) setDateError(null);
+  };
 
   const courseName = isEdit
     ? scheduledQuery.data?.trainingCourse?.name
@@ -157,165 +163,337 @@ export default function ScheduledCourseForm() {
     : ["planning", "scheduled"];
 
   const loading = (isEdit && scheduledQuery.isLoading) || (!isEdit && courseQuery.isLoading);
+  const loadError = isEdit ? scheduledQuery.error : courseQuery.error;
+
+  const title = isEdit ? "تعديل دورة مجدولة" : "جدولة دورة تدريبية";
+  const subtitle = [
+    courseName ? `الدورة: ${courseName}` : null,
+    isEdit ? `الإصدار v${version}` : null,
+  ]
+    .filter(Boolean)
+    .join(" — ");
+
+  const completionFields = [
+    formData.site,
+    formData.numStudents,
+    formData.instructors,
+    formData.startDate,
+    formData.endDate,
+  ];
+  const filled = completionFields.filter((value) => value.trim() !== "").length;
+  const completion = Math.round((filled / completionFields.length) * 100);
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    setErrors([]);
+    setDateError(null);
+    if (formData.startDate && formData.endDate && formData.endDate < formData.startDate) {
+      setDateError("تاريخ الانتهاء يجب أن يكون بعد تاريخ البداية");
+      document.getElementById("scheduled-end-date")?.focus();
+      return;
+    }
+    saveMutation.mutate();
+  };
+
+  if (loading) {
+    return (
+      <div className="stack">
+        <PageHeader title={title} subtitle={subtitle} backTo="/training" backLabel="العودة" />
+        <section className="card">
+          <LoadingState label="جارٍ تحميل البيانات…" />
+        </section>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="stack">
+        <PageHeader title={title} subtitle={subtitle} backTo="/training" backLabel="العودة" />
+        <ErrorState
+          title="تعذّر تحميل بيانات الدورة المجدولة"
+          message={extractErrorMessages(loadError).join(" — ")}
+          onRetry={() => {
+            if (isEdit) scheduledQuery.refetch();
+            else courseQuery.refetch();
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <button
-          onClick={() => navigate("/training")}
-          className="text-primary-600 hover:text-primary-800 flex items-center gap-2"
-        >
-          <ArrowLeft size={18} /> العودة
-        </button>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">
-            {isEdit ? "تعديل دورة مجدولة" : "جدولة دورة تدريبية"}
-          </h1>
-          <p className="text-gray-600">
-            {courseName ? `الدورة: ${courseName}` : ""}
-            {isEdit ? ` — الإصدار v${version}` : ""}
-          </p>
-        </div>
-      </div>
+    <div className="stack">
+      <PageHeader title={title} subtitle={subtitle} backTo="/training" backLabel="العودة" />
 
-      <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
-        {loading && <div className="text-gray-600 mb-4">جارٍ تحميل البيانات...</div>}
-
-        {errors.length > 0 && (
-          <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold">تعذر الحفظ</span>
-              <button onClick={() => setErrors([])} className="text-red-500 hover:text-red-700">
-                <X size={16} />
-              </button>
-            </div>
+      {errors.length > 0 && (
+        <div className="alert alert-danger" role="alert">
+          <AlertCircle aria-hidden="true" />
+          <div style={{ flex: 1 }}>
+            <strong>تعذر الحفظ</strong>
             {errors.map((message, index) => (
-              <div key={index}>• {message}</div>
+              <div key={index}>{message}</div>
             ))}
           </div>
-        )}
+          <button
+            type="button"
+            className="icon-btn icon-btn--sm"
+            aria-label="إخفاء التنبيه"
+            onClick={() => setErrors([])}
+            style={{ flex: "none" }}
+          >
+            <X aria-hidden="true" />
+          </button>
+        </div>
+      )}
 
+      <div className="form-layout">
         <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            setErrors([]);
-            if (formData.startDate && formData.endDate && formData.endDate < formData.startDate) {
-              setErrors(["تاريخ الانتهاء يجب أن يكون بعد تاريخ البداية"]);
-              return;
-            }
-            saveMutation.mutate();
-          }}
-          className="space-y-6"
+          id="scheduled-course-form"
+          className="main-col"
+          style={{ gap: 18 }}
+          onSubmit={handleSubmit}
+          noValidate
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">الموقع</label>
-              <input
-                type="text"
-                value={formData.site}
-                onChange={set("site")}
-                maxLength={255}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-              />
+          <section className="card">
+            <div className="form-section-head">
+              <span className="form-section-num" aria-hidden="true">
+                1
+              </span>
+              <h2 className="form-section-title">تفاصيل الجلسة</h2>
+              <span className="form-section-note">المكان والمدربون والعدد المستهدف</span>
             </div>
+            <div className="form-body">
+              <div className="field">
+                <label className="label" htmlFor="scheduled-site">
+                  الموقع
+                </label>
+                <input
+                  className="input"
+                  id="scheduled-site"
+                  name="site"
+                  type="text"
+                  value={formData.site}
+                  onChange={set("site")}
+                  maxLength={255}
+                  spellCheck={false}
+                />
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                عدد المتدربين المستهدف
-              </label>
-              <input
-                type="number"
-                min={0}
-                value={formData.numStudents}
-                onChange={set("numStudents")}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-              />
+              <div className="field">
+                <label className="label" htmlFor="scheduled-num-students">
+                  عدد المتدربين المستهدف
+                </label>
+                <input
+                  className="input"
+                  id="scheduled-num-students"
+                  name="numStudents"
+                  type="number"
+                  min={0}
+                  value={formData.numStudents}
+                  onChange={set("numStudents")}
+                />
+              </div>
+
+              <div className="field full">
+                <label className="label" htmlFor="scheduled-instructors">
+                  المدربون
+                </label>
+                <input
+                  className="input"
+                  id="scheduled-instructors"
+                  name="instructors"
+                  type="text"
+                  value={formData.instructors}
+                  onChange={set("instructors")}
+                  maxLength={255}
+                  spellCheck={false}
+                />
+              </div>
             </div>
+          </section>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">المدربون</label>
-              <input
-                type="text"
-                value={formData.instructors}
-                onChange={set("instructors")}
-                maxLength={255}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-              />
+          <section className="card">
+            <div className="form-section-head">
+              <span className="form-section-num" aria-hidden="true">
+                2
+              </span>
+              <h2 className="form-section-title">التوقيت والحالة</h2>
             </div>
+            <div className="form-body">
+              <div className="field">
+                <label className="label" htmlFor="scheduled-start-date">
+                  تاريخ البداية
+                </label>
+                <input
+                  className="input"
+                  id="scheduled-start-date"
+                  name="startDate"
+                  type="date"
+                  value={formData.startDate}
+                  onChange={set("startDate")}
+                />
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">تاريخ البداية</label>
-              <input
-                type="date"
-                value={formData.startDate}
-                onChange={set("startDate")}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-              />
+              <div className="field">
+                <label className="label" htmlFor="scheduled-end-date">
+                  تاريخ الانتهاء
+                </label>
+                <input
+                  className={`input${dateError ? " is-invalid" : ""}`}
+                  id="scheduled-end-date"
+                  name="endDate"
+                  type="date"
+                  value={formData.endDate}
+                  onChange={set("endDate")}
+                  aria-invalid={dateError ? "true" : undefined}
+                  aria-describedby={dateError ? "scheduled-end-date-err" : undefined}
+                />
+                {dateError && (
+                  <p className="err" id="scheduled-end-date-err">
+                    <AlertCircle aria-hidden="true" />
+                    {dateError}
+                  </p>
+                )}
+              </div>
+
+              <div className="field full">
+                <label className="label" htmlFor="scheduled-status">
+                  الحالة
+                </label>
+                <select
+                  className="select"
+                  id="scheduled-status"
+                  value={formData.status}
+                  onChange={set("status")}
+                >
+                  {statusOptions.map((status) => (
+                    <option key={status} value={status}>
+                      {STATUS_LABELS[status] ?? status}
+                    </option>
+                  ))}
+                </select>
+                {isEdit && !(ALLOWED_TRANSITIONS[currentStatus] ?? []).length && (
+                  <span className="hint">الدورة مكتملة — لا توجد انتقالات حالة متاحة.</span>
+                )}
+              </div>
             </div>
+          </section>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">تاريخ الانتهاء</label>
-              <input
-                type="date"
-                value={formData.endDate}
-                onChange={set("endDate")}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-              />
+          <section className="card">
+            <div className="form-section-head">
+              <span className="form-section-num" aria-hidden="true">
+                3
+              </span>
+              <h2 className="form-section-title">الملاحظات</h2>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">الحالة</label>
-              <select
-                value={formData.status}
-                onChange={set("status")}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-              >
-                {statusOptions.map((status) => (
-                  <option key={status} value={status}>
-                    {STATUS_LABELS[status] ?? status}
-                  </option>
-                ))}
-              </select>
-              {isEdit && !(ALLOWED_TRANSITIONS[currentStatus] ?? []).length && (
-                <p className="text-xs text-gray-500 mt-1">
-                  الدورة مكتملة — لا توجد انتقالات حالة متاحة.
-                </p>
-              )}
+            <div className="form-body">
+              <div className="field full">
+                <label className="label" htmlFor="scheduled-notes">
+                  الملاحظات
+                </label>
+                <textarea
+                  className="textarea"
+                  id="scheduled-notes"
+                  name="notes"
+                  value={formData.notes}
+                  onChange={set("notes")}
+                  rows={4}
+                />
+                <span className="hint">اختياري. تُحفظ مع الجلسة وتظهر لمدير التدريب.</span>
+              </div>
             </div>
-
-            <div className="lg:col-span-3">
-              <label className="block text-sm font-medium text-gray-700 mb-1">الملاحظات</label>
-              <textarea
-                value={formData.notes}
-                onChange={set("notes")}
-                rows={3}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-3 pt-4 border-t border-gray-100">
-            <button
-              type="submit"
-              disabled={saveMutation.isPending}
-              className="bg-primary-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-primary-700 disabled:opacity-60 flex items-center gap-2 transition"
-            >
-              {isEdit ? <Save size={18} /> : <CalendarPlus size={18} />}
-              {saveMutation.isPending
-                ? "جارٍ الحفظ..."
-                : isEdit
-                  ? "حفظ التعديلات"
-                  : "جدولة الدورة"}
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate("/training")}
-              className="bg-gray-100 text-gray-700 px-6 py-3 rounded-lg font-medium hover:bg-gray-200 transition"
-            >
-              إلغاء
-            </button>
-          </div>
+          </section>
         </form>
+
+        <aside className="side">
+          <section className="card">
+            <div className="card-head">
+              <h2 className="card-title">ملخّص الجلسة</h2>
+            </div>
+            <div className="card-body">
+              <div className="summary-row">
+                <span className="summary-key">الدورة</span>
+                <span className={`summary-val${courseName ? "" : " empty"}`}>
+                  {courseName ?? "غير محددة"}
+                </span>
+              </div>
+              <div className="summary-row">
+                <span className="summary-key">الموقع</span>
+                <span className={`summary-val${formData.site ? "" : " empty"}`}>
+                  {formData.site || "بدون موقع"}
+                </span>
+              </div>
+              <div className="summary-row">
+                <span className="summary-key">الفترة</span>
+                <span
+                  className={`summary-val${
+                    formData.startDate || formData.endDate ? "" : " empty"
+                  }`}
+                >
+                  {formData.startDate || formData.endDate
+                    ? `${formData.startDate || "—"} — ${formData.endDate || "—"}`
+                    : "غير محددة"}
+                </span>
+              </div>
+              <div className="summary-row">
+                <span className="summary-key">الحالة</span>
+                <span className="summary-val">
+                  {STATUS_LABELS[formData.status] ?? formData.status}
+                </span>
+              </div>
+              {isEdit && (
+                <div className="summary-row">
+                  <span className="summary-key">الإصدار</span>
+                  <span className="summary-val num">v{version}</span>
+                </div>
+              )}
+
+              <div className="progress" style={{ marginTop: 14 }}>
+                <div className="progress-top">
+                  <b>اكتمال البيانات</b>
+                  <span>
+                    {filled} من {completionFields.length}
+                  </span>
+                </div>
+                <div className="progress-track">
+                  <div className="progress-fill" style={{ width: `${completion}%` }} />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="card">
+            <div
+              className="card-body"
+              style={{ display: "flex", flexDirection: "column", gap: 9 }}
+            >
+              <button
+                type="submit"
+                form="scheduled-course-form"
+                className="btn btn-primary btn-block"
+                disabled={saveMutation.isPending}
+              >
+                {isEdit ? <Save aria-hidden="true" /> : <CalendarPlus aria-hidden="true" />}
+                {saveMutation.isPending
+                  ? "جارٍ الحفظ…"
+                  : isEdit
+                    ? "حفظ التعديلات"
+                    : "جدولة الدورة"}
+              </button>
+              <a
+                className="btn btn-ghost btn-block"
+                href="/training"
+                onClick={(event) => {
+                  event.preventDefault();
+                  navigate("/training");
+                }}
+              >
+                إلغاء
+              </a>
+            </div>
+          </section>
+        </aside>
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import { prisma } from "../lib/prisma";
+import { notFound } from "../lib/httpError";
 
 export interface PersonCreateInput {
   surname: string;
@@ -81,7 +82,7 @@ export class PersonService {
     });
 
     if (!person) {
-      throw new Error("Person not found");
+      throw notFound("Person not found");
     }
 
     return person;
@@ -107,7 +108,7 @@ export class PersonService {
   static async update(id: number, data: Partial<PersonCreateInput>) {
     const existing = await prisma.person.findUnique({ where: { id } });
     if (!existing) {
-      throw new Error("Person not found");
+      throw notFound("Person not found");
     }
 
     return prisma.person.update({
@@ -130,7 +131,7 @@ export class PersonService {
   static async delete(id: number) {
     const existing = await prisma.person.findUnique({ where: { id } });
     if (!existing) {
-      throw new Error("Person not found");
+      throw notFound("Person not found");
     }
 
     return prisma.person.delete({ where: { id } });

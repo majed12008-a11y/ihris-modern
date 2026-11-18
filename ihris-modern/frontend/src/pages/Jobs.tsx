@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/services/api";
@@ -8,15 +8,22 @@ import {
   Plus,
   Pencil,
   Trash2,
-  Search,
-  ChevronRight,
-  ChevronLeft,
-  AlertTriangle,
-  Briefcase,
+  Eye,
   Save,
   X,
-  Eye,
+  SearchX,
+  Layers,
+  AlertCircle,
 } from "lucide-react";
+import { formatNumber } from "@/lib/format";
+import PageHeader from "@/components/ui/PageHeader";
+import Pagination from "@/components/ui/Pagination";
+import SearchInput from "@/components/ui/SearchInput";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import Pill from "@/components/ui/Pill";
+import { EmptyState, ErrorState, TableSkeleton } from "@/components/ui/StateViews";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useListParams } from "@/hooks/useListParams";
 
 interface Ref {
   id: number;
@@ -64,30 +71,50 @@ const emptyForm: JobFormData = {
   classificationId: "",
 };
 
-const PAGE_SIZE = 20;
+const PAGE_SIZES = [10, 20, 50];
 
 export default function Jobs() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const currentUser = useAuthStore((state) => state.user);
-  const canWrite = currentUser?.role === "admin" || currentUser?.role === "hr_manager";
+  const canWrite =
+    currentUser?.role === "admin" || currentUser?.role === "hr_manager";
   const isAdmin = currentUser?.role === "admin";
 
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
+  const { q, page, limit, setQ, setPage, setLimit } = useListParams({
+    defaultLimit: 20,
+  });
+  const [searchInput, setSearchInput] = useState(q);
+  const debouncedInput = useDebouncedValue(searchInput, 300);
+
   const [editing, setEditing] = useState<JobRow | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [formData, setFormData] = useState<JobFormData>(emptyForm);
   const [formErrors, setFormErrors] = useState<string[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<JobRow | null>(null);
 
-  const { data, isLoading, error } = useQuery<JobListResponse>({
-    queryKey: ["jobs", search, page],
+  const dialogTitleId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const firstFieldRef = useRef<HTMLInputElement>(null);
+
+  // إدخال المستخدم ← عنوان URL (بعد توقّف الكتابة)
+  useEffect(() => {
+    const next = debouncedInput.trim();
+    if (next !== q) setQ(next);
+  }, [debouncedInput, q, setQ]);
+
+  // تغيّر خارجي (رابط أو زر الرجوع) ← حقل البحث
+  useEffect(() => {
+    setSearchInput(q);
+  }, [q]);
+
+  const { data, isLoading, isFetching, error, refetch } = useQuery<JobListResponse>({
+    queryKey: ["jobs", q, page, limit],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (search) params.set("search", search);
+      if (q) params.set("search", q);
       params.set("page", String(page));
-      params.set("limit", String(PAGE_SIZE));
+      params.set("limit", String(limit));
       const res = await api.get(`/jobs?${params.toString()}`);
       return res.data;
     },
@@ -127,6 +154,29 @@ export default function Jobs() {
     setFormErrors([]);
     setFormOpen(true);
   };
+
+  const closeForm = () => {
+    setFormOpen(false);
+    setEditing(null);
+  };
+
+  // إغلاق نافذة النموذج بـ Escape وإعادة التركيز
+  useEffect(() => {
+    if (!formOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    firstFieldRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setFormOpen(false);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      previous?.focus?.();
+    };
+  }, [formOpen]);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -176,189 +226,261 @@ export default function Jobs() {
     },
   });
 
-  if (isLoading) {
-    return <div className="p-6 text-gray-600">جاري تحميل المسميات الوظيفية...</div>;
-  }
+  const rows = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 1;
+  const from = total === 0 ? 0 : (page - 1) * limit + 1;
+  const to = Math.min(page * limit, total);
 
-  if (error) {
-    return (
-      <div className="bg-white p-6 rounded-xl shadow border border-red-100">
-        <div className="text-red-600 font-bold mb-2">⚠️ حدث خطأ في تحميل البيانات</div>
-        <p className="text-gray-600 text-sm">
-          {error instanceof Error ? error.message : String(error)}
-        </p>
-      </div>
-    );
-  }
+  const clearSearch = () => {
+    setSearchInput("");
+    setQ("");
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">المسميات الوظيفية</h1>
-          <p className="text-gray-600">
-            بيانات مرجعية — درجة الراتب والفئة والتصنيف تُدار عبر cascade
-          </p>
-        </div>
-        {canWrite && (
-          <button
-            onClick={openCreate}
-            className="bg-primary-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium hover:bg-primary-700 transition"
+    <div className="stack">
+      <PageHeader
+        title="المسميات الوظيفية"
+        subtitle={
+          isLoading
+            ? "جاري تحميل المسميات الوظيفية…"
+            : `بيانات مرجعية — درجة الراتب والفئة والتصنيف تُدار عبر cascade · ${formatNumber(
+                total
+              )} مسمى`
+        }
+        actions={
+          canWrite ? (
+            <button type="button" className="btn btn-primary" onClick={openCreate}>
+              <Plus aria-hidden="true" />
+              مسمى جديد
+            </button>
+          ) : undefined
+        }
+      />
+
+      {error && (
+        <ErrorState
+          title="تعذّر تحميل المسميات الوظيفية"
+          message={error instanceof Error ? error.message : String(error)}
+          onRetry={() => refetch()}
+        />
+      )}
+
+      <section className="card">
+        <div className="toolbar">
+          <SearchInput
+            value={searchInput}
+            onChange={setSearchInput}
+            placeholder="البحث بالمسمى أو الكود…"
+            label="بحث في المسميات الوظيفية"
+          />
+
+          <select
+            className="select"
+            value={limit}
+            onChange={(event) => setLimit(Number(event.target.value))}
+            aria-label="عدد السجلات في الصفحة"
           >
-            <Plus size={18} /> مسمى جديد
-          </button>
-        )}
-      </div>
+            {PAGE_SIZES.map((size) => (
+              <option key={size} value={size}>
+                {size} في الصفحة
+              </option>
+            ))}
+          </select>
 
-      <div className="bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-100">
-          <div className="relative md:w-96">
-            <Search size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="البحث بالمسمى أو الكود..."
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              className="w-full pr-10 pl-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-            />
-          </div>
+          {(q || searchInput) && (
+            <button type="button" className="clear-link" onClick={clearSearch}>
+              مسح البحث
+            </button>
+          )}
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-gray-50 border-b border-gray-200">
+        <div className="table-wrap">
+          <table className="data-table data-table--dense">
+            <thead>
               <tr>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">المسمى</th>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">الكود</th>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">الدرجة / الفئة / التصنيف</th>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">الوظائف</th>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">الإجراءات</th>
+                <th scope="col">المسمى</th>
+                <th scope="col" className="col-compact">
+                  الكود
+                </th>
+                <th scope="col" className="col-optional">
+                  الدرجة / الفئة / التصنيف
+                </th>
+                <th scope="col" className="col-compact">
+                  الوظائف
+                </th>
+                <th scope="col">
+                  <span className="sr-only">إجراءات</span>
+                </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
-              {(data?.data || []).map((row) => (
-                <tr key={row.id} className="hover:bg-gray-50 transition">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="bg-primary-50 text-primary-600 p-2 rounded-lg">
-                        <Briefcase size={18} />
-                      </div>
-                      <div>
-                        <div className="font-medium text-gray-800">{row.title}</div>
+            <tbody>
+              {isLoading && (
+                <TableSkeleton
+                  rows={6}
+                  cols={5}
+                  widths={[190, 70, 210, 50, 0]}
+                />
+              )}
+
+              {!isLoading &&
+                rows.map((row) => (
+                  <tr key={row.id}>
+                    <td>
+                      <span
+                        className="person-meta"
+                        style={{ maxWidth: 420 }}
+                      >
+                        <span className="person-name">{row.title}</span>
                         {row.description && (
-                          <div className="text-xs text-gray-500 line-clamp-1">
+                          <span className="person-sub" title={row.description}>
                             {row.description}
-                          </div>
+                          </span>
+                        )}
+                      </span>
+                    </td>
+                    <td className="mono col-compact">{row.code || "—"}</td>
+                    <td className="col-optional">
+                      {[row.salaryGrade?.name, row.cadre?.name, row.classification?.name]
+                        .filter(Boolean)
+                        .join(" / ") || "—"}
+                    </td>
+                    <td className="col-compact">
+                      <Pill tone={row.positionsCount > 0 ? "warn" : "mute"}>
+                        {formatNumber(row.positionsCount)}
+                      </Pill>
+                    </td>
+                    <td className="col-actions">
+                      <div className="row-actions">
+                        <a
+                          className="icon-btn icon-btn--sm"
+                          href={`/jobs/${row.id}`}
+                          aria-label={`عرض تفاصيل ${row.title}`}
+                          title="عرض التفاصيل"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            navigate(`/jobs/${row.id}`);
+                          }}
+                        >
+                          <Eye aria-hidden="true" />
+                        </a>
+                        {canWrite && (
+                          <button
+                            type="button"
+                            className="icon-btn icon-btn--sm"
+                            aria-label={`تعديل ${row.title}`}
+                            title="تعديل"
+                            onClick={() => openEdit(row)}
+                          >
+                            <Pencil aria-hidden="true" />
+                          </button>
+                        )}
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            className="icon-btn icon-btn--sm danger"
+                            aria-label={`حذف ${row.title}`}
+                            title="حذف"
+                            onClick={() => setDeleteTarget(row)}
+                          >
+                            <Trash2 aria-hidden="true" />
+                          </button>
                         )}
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-gray-600 text-sm font-mono">
-                    {row.code || "—"}
-                  </td>
-                  <td className="px-6 py-4 text-gray-600 text-sm">
-                    {[row.salaryGrade?.name, row.cadre?.name, row.classification?.name]
-                      .filter(Boolean)
-                      .join(" / ") || "—"}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                      {row.positionsCount}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => navigate(`/jobs/${row.id}`)}
-                        className="text-gray-600 hover:text-gray-900 p-1"
-                        title="عرض التفاصيل"
-                      >
-                        <Eye size={18} />
-                      </button>
-                      {canWrite && (
-                        <button
-                          onClick={() => openEdit(row)}
-                          className="text-primary-600 hover:text-primary-800 p-1"
-                          title="تعديل"
-                        >
-                          <Pencil size={18} />
-                        </button>
-                      )}
-                      {isAdmin && (
-                        <button
-                          onClick={() => setDeleteTarget(row)}
-                          className="text-red-600 hover:text-red-800 p-1"
-                          title="حذف"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </div>
 
-        {!data?.data?.length && (
-          <div className="text-center py-12 text-gray-500">لا توجد مسميات مطابقة</div>
+        {!isLoading && rows.length === 0 && (
+          <EmptyState
+            icon={q ? SearchX : Layers}
+            title={q ? "لا توجد مسميات مطابقة" : "لا توجد مسميات بعد"}
+            text={
+              q
+                ? `لم نجد مسمى يطابق «${q}». جرّب جزءاً من المسمى أو امسح البحث.`
+                : "أضف أول مسمى وظيفي ليظهر في الوظائف والنماذج المرتبطة."
+            }
+            action={
+              q ? (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={clearSearch}
+                >
+                  مسح البحث
+                </button>
+              ) : canWrite ? (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={openCreate}
+                >
+                  <Plus aria-hidden="true" />
+                  مسمى جديد
+                </button>
+              ) : undefined
+            }
+          />
         )}
 
-        {data && data.totalPages > 1 && (
-          <div className="p-4 border-t border-gray-100 flex items-center justify-between text-sm">
-            <span className="text-gray-600">
-              صفحة {data.page} من {data.totalPages} — {data.total} مسمى
-            </span>
-            <div className="flex gap-2">
-              <button
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="px-3 py-1.5 border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50 flex items-center gap-1"
-              >
-                <ChevronRight size={16} /> السابق
-              </button>
-              <button
-                disabled={page >= data.totalPages}
-                onClick={() => setPage((p) => p + 1)}
-                className="px-3 py-1.5 border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50 flex items-center gap-1"
-              >
-                التالي <ChevronLeft size={16} />
-              </button>
-            </div>
-          </div>
+        {!isLoading && rows.length > 0 && (
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            from={from}
+            to={to}
+            onPage={setPage}
+            isFetching={isFetching}
+          />
         )}
-      </div>
+      </section>
 
       {formOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full p-6 m-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-800">
-                {editing ? "تعديل مسمى وظيفي" : "إضافة مسمى وظيفي"}
-              </h2>
+        <div
+          className="dialog-overlay"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeForm();
+          }}
+        >
+          <div
+            className="dialog dialog--wide"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={dialogTitleId}
+            ref={panelRef}
+          >
+            <div className="dialog-head">
+              <span className="dialog-icon" aria-hidden="true">
+                <Layers size={18} />
+              </span>
+              <div style={{ minWidth: 0 }}>
+                <h2 className="dialog-title" id={dialogTitleId}>
+                  {editing ? "تعديل مسمى وظيفي" : "إضافة مسمى وظيفي"}
+                </h2>
+                <p className="dialog-text">
+                  {editing
+                    ? editing.title
+                    : "المسمى والكود وبيانات التصنيف المرجعية"}
+                </p>
+              </div>
               <button
-                onClick={() => setFormOpen(false)}
-                className="text-gray-400 hover:text-gray-600"
+                type="button"
+                className="icon-btn"
+                aria-label="إغلاق"
+                onClick={closeForm}
+                style={{ marginInlineStart: "auto", flex: "none" }}
               >
-                <X size={20} />
+                <X size={16} aria-hidden="true" />
               </button>
             </div>
 
-            {formErrors.length > 0 && (
-              <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm space-y-1">
-                {formErrors.map((err, i) => (
-                  <div key={i}>• {err}</div>
-                ))}
-              </div>
-            )}
-
             <form
-              onSubmit={(e) => {
-                e.preventDefault();
+              onSubmit={(event) => {
+                event.preventDefault();
                 setFormErrors([]);
                 if (!formData.title.trim()) {
                   setFormErrors(["المسمى الوظيفي مطلوب"]);
@@ -366,121 +488,169 @@ export default function Jobs() {
                 }
                 saveMutation.mutate();
               }}
-              className="space-y-4"
             >
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    المسمى الوظيفي *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                    maxLength={255}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    الكود (اختياري)
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.code}
-                    onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none font-mono"
-                    maxLength={50}
-                  />
-                </div>
+              <div className="dialog-body">
+                {formErrors.length > 0 && (
+                  <div
+                    className="alert alert-danger"
+                    role="alert"
+                    style={{ marginBottom: 14 }}
+                  >
+                    <AlertCircle aria-hidden="true" />
+                    <div>
+                      {formErrors.map((message, index) => (
+                        <div key={index}>{message}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    درجة الراتب
-                  </label>
-                  <select
-                    value={formData.salaryGradeId}
-                    onChange={(e) =>
-                      setFormData({ ...formData, salaryGradeId: e.target.value })
-                    }
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                  >
-                    <option value="">بدون</option>
-                    {salaryGrades.map((g) => (
-                      <option key={g.id} value={g.id}>
-                        {g.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    الفئة الوظيفية
-                  </label>
-                  <select
-                    value={formData.cadreId}
-                    onChange={(e) => setFormData({ ...formData, cadreId: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                  >
-                    <option value="">بدون</option>
-                    {cadres.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    التصنيف الوظيفي
-                  </label>
-                  <select
-                    value={formData.classificationId}
-                    onChange={(e) =>
-                      setFormData({ ...formData, classificationId: e.target.value })
-                    }
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                  >
-                    <option value="">بدون</option>
-                    {classifications.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    الوصف (اختياري)
-                  </label>
-                  <textarea
-                    value={formData.description}
-                    onChange={(e) =>
-                      setFormData({ ...formData, description: e.target.value })
-                    }
-                    rows={3}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                    maxLength={5000}
-                  />
+                <div className="form-body" style={{ padding: 0 }}>
+                  <div className="field">
+                    <label className="label" htmlFor="job-title">
+                      المسمى الوظيفي <span className="req">*</span>
+                    </label>
+                    <input
+                      ref={firstFieldRef}
+                      className={`input${
+                        formErrors.length > 0 && !formData.title.trim()
+                          ? " is-invalid"
+                          : ""
+                      }`}
+                      id="job-title"
+                      type="text"
+                      value={formData.title}
+                      onChange={(event) =>
+                        setFormData({ ...formData, title: event.target.value })
+                      }
+                      maxLength={255}
+                      aria-invalid={
+                        formErrors.length > 0 && !formData.title.trim()
+                          ? "true"
+                          : undefined
+                      }
+                      required
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label className="label" htmlFor="job-code">
+                      الكود (اختياري)
+                    </label>
+                    <input
+                      className="input mono"
+                      id="job-code"
+                      type="text"
+                      value={formData.code}
+                      onChange={(event) =>
+                        setFormData({ ...formData, code: event.target.value })
+                      }
+                      maxLength={50}
+                      spellCheck={false}
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label className="label" htmlFor="job-salary-grade">
+                      درجة الراتب
+                    </label>
+                    <select
+                      className="select"
+                      id="job-salary-grade"
+                      value={formData.salaryGradeId}
+                      onChange={(event) =>
+                        setFormData({
+                          ...formData,
+                          salaryGradeId: event.target.value,
+                        })
+                      }
+                    >
+                      <option value="">بدون</option>
+                      {salaryGrades.map((grade) => (
+                        <option key={grade.id} value={grade.id}>
+                          {grade.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="field">
+                    <label className="label" htmlFor="job-cadre">
+                      الفئة الوظيفية
+                    </label>
+                    <select
+                      className="select"
+                      id="job-cadre"
+                      value={formData.cadreId}
+                      onChange={(event) =>
+                        setFormData({ ...formData, cadreId: event.target.value })
+                      }
+                    >
+                      <option value="">بدون</option>
+                      {cadres.map((cadre) => (
+                        <option key={cadre.id} value={cadre.id}>
+                          {cadre.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="field">
+                    <label className="label" htmlFor="job-classification">
+                      التصنيف الوظيفي
+                    </label>
+                    <select
+                      className="select"
+                      id="job-classification"
+                      value={formData.classificationId}
+                      onChange={(event) =>
+                        setFormData({
+                          ...formData,
+                          classificationId: event.target.value,
+                        })
+                      }
+                    >
+                      <option value="">بدون</option>
+                      {classifications.map((classification) => (
+                        <option key={classification.id} value={classification.id}>
+                          {classification.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="field full">
+                    <label className="label" htmlFor="job-description">
+                      الوصف (اختياري)
+                    </label>
+                    <textarea
+                      className="textarea"
+                      id="job-description"
+                      value={formData.description}
+                      onChange={(event) =>
+                        setFormData({
+                          ...formData,
+                          description: event.target.value,
+                        })
+                      }
+                      rows={3}
+                      maxLength={5000}
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="flex gap-3 pt-4 border-t border-gray-100">
-                <button
-                  type="submit"
-                  disabled={saveMutation.isPending}
-                  className="bg-primary-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-primary-700 disabled:opacity-60 flex items-center gap-2"
-                >
-                  <Save size={18} />
-                  {saveMutation.isPending ? "جاري الحفظ..." : "حفظ"}
+              <div className="dialog-foot">
+                <button type="button" className="btn btn-ghost" onClick={closeForm}>
+                  إلغاء
                 </button>
                 <button
-                  type="button"
-                  onClick={() => setFormOpen(false)}
-                  className="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg font-medium hover:bg-gray-200"
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={saveMutation.isPending}
                 >
-                  إلغاء
+                  <Save aria-hidden="true" />
+                  {saveMutation.isPending ? "جارٍ الحفظ…" : "حفظ"}
                 </button>
               </div>
             </form>
@@ -488,41 +658,20 @@ export default function Jobs() {
         </div>
       )}
 
-      {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 m-4">
-            <div className="flex items-start gap-3 mb-4">
-              <div className="bg-red-100 text-red-600 p-2 rounded-full">
-                <AlertTriangle size={22} />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-gray-800">حذف المسمى الوظيفي</h2>
-                <p className="text-gray-600 text-sm mt-1">
-                  سيتم حذف <span className="font-bold">{deleteTarget.title}</span> نهائياً.
-                  لا يمكن الحذف إذا كان مرتبطاً بوظائف شاغرة ({deleteTarget.positionsCount}).
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-3 pt-4 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={() => setDeleteTarget(null)}
-                className="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg font-medium hover:bg-gray-200"
-              >
-                إلغاء
-              </button>
-              <button
-                type="button"
-                disabled={deleteMutation.isPending}
-                onClick={() => deleteMutation.mutate(deleteTarget)}
-                className="bg-red-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-red-700 disabled:opacity-60"
-              >
-                {deleteMutation.isPending ? "جاري الحذف..." : "تأكيد الحذف"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="حذف المسمى الوظيفي"
+        text={
+          <>
+            سيتم حذف <strong>{deleteTarget?.title}</strong> نهائياً. لا يمكن الحذف
+            إذا كان مرتبطاً بوظائف شاغرة (
+            {formatNumber(deleteTarget?.positionsCount ?? 0)}).
+          </>
+        }
+        pending={deleteMutation.isPending}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

@@ -1,7 +1,15 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/services/api";
-import { ArrowLeft } from "lucide-react";
+import { Play, Edit, History } from "lucide-react";
+import PageHeader from "@/components/ui/PageHeader";
+import Pill from "@/components/ui/Pill";
+import {
+  EmptyState,
+  ErrorState,
+  LoadingState,
+} from "@/components/ui/StateViews";
+import { formatDate, formatNumber } from "@/lib/format";
 
 interface ReportDetail {
   id: number;
@@ -32,12 +40,36 @@ interface ReportDetail {
   }>;
 }
 
+const TYPE_LABELS: Record<string, string> = {
+  list: "قائمة",
+  table: "جدول",
+  pie: "رسم بياني دائري",
+  bar: "رسم بياني شريطي",
+  line: "رسم بياني خطي",
+};
+
+function typeLabel(type: string) {
+  return TYPE_LABELS[type] ?? type;
+}
+
+function executionTone(status: string) {
+  if (status === "completed") return "ok" as const;
+  if (status === "failed") return "danger" as const;
+  return "warn" as const;
+}
+
+function executionLabel(status: string) {
+  if (status === "completed") return "مكتمل";
+  if (status === "failed") return "فشل";
+  return "جاري";
+}
+
 export default function ReportDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const reportId = parseInt(id || "0", 10);
 
-  const { data, isLoading, error } = useQuery<ReportDetail>({
+  const { data, isLoading, error, refetch } = useQuery<ReportDetail>({
     queryKey: ["report", reportId],
     queryFn: async () => {
       const res = await api.get(`/reports/${reportId}`);
@@ -48,171 +80,237 @@ export default function ReportDetail() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-600">جاري تحميل التقرير...</p>
-        </div>
+      <div className="stack">
+        <PageHeader
+          title="تفاصيل التقرير"
+          subtitle="جاري تحميل بيانات التقرير…"
+          backTo="/reports"
+          backLabel="رجوع إلى التقارير"
+        />
+        <section className="card">
+          <LoadingState label="جاري تحميل التقرير…" />
+        </section>
       </div>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
-        <div className="bg-white p-8 rounded-xl shadow border border-red-100 text-center">
-          <h2 className="text-red-600 font-bold mb-2">⚠️ لم يتم العثور على التقرير</h2>
-          <button
-            onClick={() => navigate("/reports")}
-            className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700"
+      <div className="stack">
+        <PageHeader
+          title="تفاصيل التقرير"
+          backTo="/reports"
+          backLabel="رجوع إلى التقارير"
+        />
+        <ErrorState
+          title="لم يتم العثور على التقرير"
+          message={
+            error instanceof Error
+              ? error.message
+              : "قد يكون التقرير محذوفاً أو غير متاح لحسابك."
+          }
+          onRetry={() => refetch()}
+        />
+        <div>
+          <a
+            className="btn btn-ghost"
+            href="/reports"
+            onClick={(event) => {
+              event.preventDefault();
+              navigate("/reports");
+            }}
           >
             العودة إلى التقارير
-          </button>
+          </a>
         </div>
       </div>
     );
   }
 
+  const executions = data.executions ?? [];
+  const createdBy = `${data.createdByUser.firstname} ${data.createdByUser.lastname}`.trim();
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <button
-          onClick={() => navigate("/reports")}
-          className="text-primary-600 hover:text-primary-800 flex items-center gap-2"
-        >
-          <ArrowLeft size={18} /> العودة إلى التقارير
-        </button>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">{data.name}</h1>
-          <p className="text-gray-600">رقم التقرير: #{data.id}</p>
-        </div>
-      </div>
+    <div className="stack">
+      <PageHeader
+        title={data.name}
+        subtitle={`رقم التقرير: #${data.id}`}
+        backTo="/reports"
+        backLabel="رجوع إلى التقارير"
+        actions={
+          <>
+            <a
+              className="btn btn-ghost"
+              href={`/reports/${data.id}/edit`}
+              onClick={(event) => {
+                event.preventDefault();
+                navigate(`/reports/${data.id}/edit`);
+              }}
+            >
+              <Edit aria-hidden="true" />
+              تعديل
+            </a>
+            <a
+              className="btn btn-primary"
+              href={`/reports/${data.id}/execute`}
+              onClick={(event) => {
+                event.preventDefault();
+                navigate(`/reports/${data.id}/execute`);
+              }}
+            >
+              <Play aria-hidden="true" />
+              تشغيل التقرير
+            </a>
+          </>
+        }
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
-          <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">
-            معلومات التقرير
-          </h3>
-          <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="text-gray-400" style={{ width: 20, height: 20 }}></div>
-              <div>
-                <div className="font-medium">{data.name}</div>
-                <div className="text-xs text-gray-500">نوع التقرير: {data.type}</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="text-gray-400" style={{ width: 20, height: 20 }}></div>
-              <div>
-                <div className="font-medium">
-                  {data.createdByUser.firstname} {data.createdByUser.lastname}
-                </div>
-                <div className="text-xs text-gray-500">م creado بواسطة</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="text-gray-400" style={{ width: 20, height: 20 }}></div>
-              <div>
-                <div className="font-medium">
-                  {new Date(data.createdAt).toLocaleDateString("ar-SA")}
-                </div>
-                <div className="text-xs text-gray-500">تاريخ الإنشاء</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="text-gray-400" style={{ width: 20, height: 20 }}></div>
-              <div>
-                <div className="font-medium">
-                  {new Date(data.updatedAt).toLocaleDateString("ar-SA")}
-                </div>
-                <div className="text-xs text-gray-500">آخر تعديل</div>
-              </div>
-            </div>
-          </div>
+      <section className="card">
+        <div className="card-head">
+          <h2 className="card-title">معلومات التقرير</h2>
+          <Pill tone={data.isEnabled ? "ok" : "mute"}>
+            {data.isEnabled ? "مفعل" : "معطل"}
+          </Pill>
         </div>
-
-        <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
-          <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">
-            الحالة والإعدادات
-          </h3>
-          <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <span
-                className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  data.isEnabled ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"
-                }`}
-              >
-                {data.isEnabled ? "مفعل" : "معطل"}
+        <div className="card-body">
+          <div className="desc-grid">
+            <div className="desc-item">
+              <span className="desc-label">اسم التقرير</span>
+              <span className="desc-value">{data.name}</span>
+            </div>
+            <div className="desc-item">
+              <span className="desc-label">نوع التقرير</span>
+              <span className="desc-value">{typeLabel(data.type)}</span>
+            </div>
+            <div className="desc-item">
+              <span className="desc-label">أنشأه</span>
+              <span className="desc-value">{createdBy || "—"}</span>
+            </div>
+            <div className="desc-item">
+              <span className="desc-label">تاريخ الإنشاء</span>
+              <span className="desc-value">{formatDate(data.createdAt)}</span>
+            </div>
+            <div className="desc-item">
+              <span className="desc-label">آخر تعديل</span>
+              <span className="desc-value">{formatDate(data.updatedAt)}</span>
+            </div>
+            <div className="desc-item">
+              <span className="desc-label">عمليات التنفيذ</span>
+              <span className="desc-value num">
+                {formatNumber(executions.length)}
               </span>
             </div>
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-600">عدد عمليات التنفيذ:</span>
-              <span className="font-mono text-gray-800">{data.executions?.length || 0}</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-600">نوع التقرير:</span>
-              <span className="font-mono text-gray-800">{data.type}</span>
+            <div className="desc-item">
+              <span className="desc-label">الوصف</span>
+              <span
+                className={`desc-value${data.description ? "" : " empty"}`}
+              >
+                {data.description || "لا يوجد وصف"}
+              </span>
             </div>
           </div>
         </div>
+      </section>
 
-        <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
-          <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">
-            تعريف التقرير (JSON)
-          </h3>
-          <div className="bg-gray-900 p-4 rounded-lg font-mono text-xs text-green-400 overflow-x-auto">
-            <pre>{JSON.stringify(data.definition, null, 2)}</pre>
-          </div>
+      <section className="card">
+        <div className="card-head">
+          <h2 className="card-title">تعريف التقرير</h2>
+          <span className="card-sub">JSON</span>
+        </div>
+        <div className="card-body">
+          {data.definition ? (
+            <pre
+              className="mono"
+              dir="ltr"
+              style={{
+                margin: 0,
+                padding: 14,
+                background: "var(--surface-2)",
+                border: "1px solid var(--line)",
+                borderRadius: "var(--r-md)",
+                overflowX: "auto",
+                lineHeight: 1.7,
+                textAlign: "left",
+                color: "var(--text-2)",
+              }}
+            >
+              {JSON.stringify(data.definition, null, 2)}
+            </pre>
+          ) : (
+            <p className="muted">لا يوجد تعريف محفوظ لهذا التقرير.</p>
+          )}
+        </div>
+      </section>
+
+      <section className="card">
+        <div className="card-head">
+          <h2 className="card-title">سجل العمليات الأخيرة</h2>
+          <span className="card-sub">
+            {formatNumber(executions.length)} عملية
+          </span>
         </div>
 
-        <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
-          <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">
-            سجل العمليات الأخيرة
-          </h3>
-          {(data.executions?.length || 0) > 0 ? (
-            <table className="w-full text-left text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
+        {executions.length > 0 ? (
+          <div className="table-wrap">
+            <table className="data-table data-table--dense">
+              <thead>
                 <tr>
-                  <th className="px-4 py-2 font-semibold text-gray-700">تاريخ التنفيذ</th>
-                  <th className="px-4 py-2 font-semibold text-gray-700">الحالة</th>
-                  <th className="px-4 py-2 font-semibold text-gray-700">عدد السجلات</th>
-                  <th className="px-4 py-2 font-semibold text-gray-700">المستخدم</th>
+                  <th scope="col">تاريخ التنفيذ</th>
+                  <th scope="col">الحالة</th>
+                  <th scope="col">عدد السجلات</th>
+                  <th scope="col" className="col-optional">
+                    المستخدم
+                  </th>
+                  <th scope="col" className="col-compact">
+                    الانتهاء
+                  </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
-                {data.executions.map((ex) => (
-                  <tr key={ex.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-gray-600 text-sm">
-                      {new Date(ex.startedAt).toLocaleDateString("ar-SA")}
+              <tbody>
+                {executions.map((execution) => (
+                  <tr key={execution.id}>
+                    <td className="mono">{formatDate(execution.startedAt)}</td>
+                    <td>
+                      <Pill tone={executionTone(execution.status)}>
+                        {executionLabel(execution.status)}
+                      </Pill>
                     </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          ex.status === "completed"
-                            ? "bg-green-100 text-green-700"
-                            : ex.status === "failed"
-                            ? "bg-red-100 text-red-700"
-                            : "bg-blue-100 text-blue-700"
-                        }`}
-                      >
-                        {ex.status === "completed" ? "مكتمل" : ex.status === "failed" ? "فشل" : "جاري"}
-                      </span>
+                    <td className="num">{formatNumber(execution.rowCount)}</td>
+                    <td className="col-optional">
+                      {execution.executedByUser.firstname}{" "}
+                      {execution.executedByUser.lastname}
                     </td>
-                    <td className="px-4 py-3 text-gray-600 text-sm">{ex.rowCount}</td>
-                    <td className="px-4 py-3 text-gray-600 text-sm">
-                      {ex.executedByUser.firstname} {ex.executedByUser.lastname}
+                    <td className="mono col-compact">
+                      {execution.completedAt
+                        ? formatDate(execution.completedAt)
+                        : "—"}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          ) : (
-            <p className="text-sm text-gray-500 italic text-center py-8">
-              لا توجد عمليات تنفيذ لهذا التقرير بعد.
-            </p>
-          )}
-        </div>
-      </div>
+          </div>
+        ) : (
+          <EmptyState
+            icon={History}
+            title="لا توجد عمليات تنفيذ لهذا التقرير بعد"
+            text="شغّل التقرير لعرض نتائجه هنا وفي سجل العمليات."
+            action={
+              <a
+                className="btn btn-primary btn-sm"
+                href={`/reports/${data.id}/execute`}
+                onClick={(event) => {
+                  event.preventDefault();
+                  navigate(`/reports/${data.id}/execute`);
+                }}
+              >
+                <Play aria-hidden="true" />
+                تشغيل التقرير
+              </a>
+            }
+          />
+        )}
+      </section>
     </div>
   );
 }

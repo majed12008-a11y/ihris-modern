@@ -159,8 +159,6 @@ export default function MainLayout() {
 
   const handleLogout = () => {
     logout();
-    localStorage.removeItem("ihris_token");
-    localStorage.removeItem("ihris_user");
     navigate("/login");
   };
 

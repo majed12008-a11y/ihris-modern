@@ -1,20 +1,16 @@
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/services/api";
 import { useAuthStore } from "@/store/authStore";
 import { toast } from "sonner";
-import {
-  Plus,
-  Pencil,
-  Trash2,
-  Search,
-  ChevronRight,
-  ChevronLeft,
-  AlertTriangle,
-  Save,
-  X,
-  type LucideIcon,
-} from "lucide-react";
+import { Plus, Pencil, Trash2, Save, X, Inbox, type LucideIcon } from "lucide-react";
+import PageHeader from "@/components/ui/PageHeader";
+import Pagination from "@/components/ui/Pagination";
+import SearchInput from "@/components/ui/SearchInput";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { EmptyState, ErrorState, TableSkeleton } from "@/components/ui/StateViews";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useListParams } from "@/hooks/useListParams";
 
 /**
  * ADR-008 §8.2 (القرار 5): مكوّن CRUD عام للبيانات المرجعية الخمسة.
@@ -74,15 +70,17 @@ export default function ReferenceDataManager({
   subtitle,
   icon: Icon,
   fields,
-  searchPlaceholder = "ابحث بالاسم أو الكود...",
+  searchPlaceholder = "ابحث بالاسم أو الكود…",
 }: ReferenceDataManagerProps) {
   const queryClient = useQueryClient();
   const currentUser = useAuthStore((state) => state.user);
   const canWrite = currentUser?.role === "admin" || currentUser?.role === "hr_manager";
   const isAdmin = currentUser?.role === "admin";
 
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
+  const { q, page, setQ, setPage } = useListParams({ defaultLimit: PAGE_SIZE });
+  const [searchInput, setSearchInput] = useState(q);
+  const debouncedInput = useDebouncedValue(searchInput, 300);
+
   const [editing, setEditing] = useState<ReferenceRow | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [formData, setFormData] = useState<Record<string, string>>(() =>
@@ -91,11 +89,24 @@ export default function ReferenceDataManager({
   const [formErrors, setFormErrors] = useState<string[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<ReferenceRow | null>(null);
 
-  const { data, isLoading, error } = useQuery<ReferenceListResponse>({
-    queryKey: ["reference", entity, search, page],
+  const dialogTitleId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const firstFieldRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const next = debouncedInput.trim();
+    if (next !== q) setQ(next);
+  }, [debouncedInput, q, setQ]);
+
+  useEffect(() => {
+    setSearchInput(q);
+  }, [q]);
+
+  const { data, isLoading, isFetching, error, refetch } = useQuery<ReferenceListResponse>({
+    queryKey: ["reference", entity, q, page],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (search) params.set("search", search);
+      if (q) params.set("search", q);
       params.set("page", String(page));
       params.set("limit", String(PAGE_SIZE));
       const res = await api.get(`/reference/${entity}?${params.toString()}`);
@@ -121,6 +132,24 @@ export default function ReferenceDataManager({
     setFormErrors([]);
     setFormOpen(true);
   };
+
+  // إغلاق نافذة النموذج بـ Escape وإعادة التركيز
+  useEffect(() => {
+    if (!formOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    firstFieldRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setFormOpen(false);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      previous?.focus?.();
+    };
+  }, [formOpen]);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -170,169 +199,205 @@ export default function ReferenceDataManager({
     },
   });
 
-  if (isLoading) {
-    return <div className="p-6 text-gray-600">جارٍ تحميل البيانات...</div>;
-  }
-
-  if (error) {
-    return (
-      <div className="bg-white p-6 rounded-xl shadow border border-red-100">
-        <div className="text-red-600 font-bold mb-2">تعذر تحميل البيانات المرجعية</div>
-        <p className="text-gray-600 text-sm">
-          {error instanceof Error ? error.message : String(error)}
-        </p>
-      </div>
-    );
-  }
+  const rows = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 1;
+  const from = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const to = Math.min(page * PAGE_SIZE, total);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="bg-primary-50 text-primary-600 p-3 rounded-xl">
-            <Icon size={24} />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800">{title}</h1>
-            <p className="text-gray-600">{subtitle}</p>
-          </div>
-        </div>
-        {canWrite && (
-          <button
-            onClick={openCreate}
-            className="bg-primary-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium hover:bg-primary-700 transition"
-          >
-            <Plus size={18} /> إضافة جديد
-          </button>
-        )}
-      </div>
+    <div className="stack">
+      <PageHeader
+        title={title}
+        subtitle={subtitle}
+        actions={
+          canWrite ? (
+            <button type="button" className="btn btn-primary" onClick={openCreate}>
+              <Plus aria-hidden="true" />
+              إضافة جديد
+            </button>
+          ) : undefined
+        }
+      />
 
-      <div className="bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-100">
-          <div className="relative md:w-96">
-            <Search size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder={searchPlaceholder}
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
+      {error && (
+        <ErrorState
+          title="تعذر تحميل البيانات المرجعية"
+          message={error instanceof Error ? error.message : String(error)}
+          onRetry={() => refetch()}
+        />
+      )}
+
+      <section className="card">
+        <div className="toolbar">
+          <SearchInput
+            value={searchInput}
+            onChange={setSearchInput}
+            placeholder={searchPlaceholder}
+            label={`بحث في ${title}`}
+          />
+          {q && (
+            <button
+              type="button"
+              className="clear-link"
+              onClick={() => {
+                setSearchInput("");
+                setQ("");
               }}
-              className="w-full pr-10 pl-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-            />
-          </div>
+            >
+              مسح البحث
+            </button>
+          )}
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-gray-50 border-b border-gray-200">
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
               <tr>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">الاسم</th>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">الكود</th>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">الوصف / ملاحظات</th>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">الإصدار</th>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">إجراءات</th>
+                <th scope="col">الاسم</th>
+                <th scope="col" className="col-compact">
+                  الكود
+                </th>
+                <th scope="col" className="col-optional">
+                  الوصف / ملاحظات
+                </th>
+                <th scope="col" className="col-compact">
+                  الإصدار
+                </th>
+                <th scope="col">
+                  <span className="sr-only">إجراءات</span>
+                </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
-              {(data?.data || []).map((row) => (
-                <tr key={row.id} className="hover:bg-gray-50 transition">
-                  <td className="px-6 py-4">
-                    <span className="font-medium text-gray-800">{row.name}</span>
-                  </td>
-                  <td className="px-6 py-4 text-gray-600 text-sm font-mono">
-                    {row.code || "—"}
-                  </td>
-                  <td className="px-6 py-4 text-gray-600 text-sm max-w-md truncate">
-                    {row.description || row.notes || "—"}
-                  </td>
-                  <td className="px-6 py-4 text-gray-600 text-sm">v{row.version}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      {canWrite && (
-                        <button
-                          onClick={() => openEdit(row)}
-                          className="text-primary-600 hover:text-primary-800 p-1"
-                          title="تعديل"
-                        >
-                          <Pencil size={18} />
-                        </button>
-                      )}
-                      {isAdmin && (
-                        <button
-                          onClick={() => setDeleteTarget(row)}
-                          className="text-red-600 hover:text-red-800 p-1"
-                          title="حذف"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+            <tbody>
+              {isLoading && <TableSkeleton rows={5} cols={5} widths={[170, 80, 220, 40, 0]} />}
+
+              {!isLoading &&
+                rows.map((row) => (
+                  <tr key={row.id}>
+                    <td>
+                      <span style={{ fontWeight: 500 }}>{row.name}</span>
+                    </td>
+                    <td className="mono col-compact">{row.code || "—"}</td>
+                    <td className="col-optional">
+                      <span
+                        style={{
+                          display: "block",
+                          maxWidth: 420,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          color: "var(--text-2)",
+                        }}
+                        title={row.description || row.notes || undefined}
+                      >
+                        {row.description || row.notes || "—"}
+                      </span>
+                    </td>
+                    <td className="mono col-compact">v{row.version}</td>
+                    <td className="col-actions">
+                      <div className="row-actions">
+                        {canWrite && (
+                          <button
+                            type="button"
+                            className="icon-btn icon-btn--sm"
+                            aria-label={`تعديل ${row.name}`}
+                            title="تعديل"
+                            onClick={() => openEdit(row)}
+                          >
+                            <Pencil aria-hidden="true" />
+                          </button>
+                        )}
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            className="icon-btn icon-btn--sm danger"
+                            aria-label={`حذف ${row.name}`}
+                            title="حذف"
+                            onClick={() => setDeleteTarget(row)}
+                          >
+                            <Trash2 aria-hidden="true" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </div>
 
-        {!data?.data?.length && (
-          <div className="text-center py-12 text-gray-500">
-            لا توجد سجلات مطابقة — أضف سجلاً جديداً للبدء
-          </div>
+        {!isLoading && rows.length === 0 && (
+          <EmptyState
+            icon={Inbox}
+            title={q ? "لا توجد سجلات مطابقة" : "لا توجد سجلات بعد"}
+            text={
+              q
+                ? `لم نجد سجلاً يطابق «${q}».`
+                : "أضف أول سجل ليظهر في القوائم المنسدلة والنماذج."
+            }
+            action={
+              canWrite && !q ? (
+                <button type="button" className="btn btn-primary btn-sm" onClick={openCreate}>
+                  <Plus aria-hidden="true" />
+                  إضافة جديد
+                </button>
+              ) : undefined
+            }
+          />
         )}
 
-        {data && data.totalPages > 1 && (
-          <div className="p-4 border-t border-gray-100 flex items-center justify-between text-sm">
-            <span className="text-gray-600">
-              صفحة {data.page} من {data.totalPages} — {data.total} سجل
-            </span>
-            <div className="flex gap-2">
-              <button
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="px-3 py-1.5 border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50 flex items-center gap-1"
-              >
-                <ChevronRight size={16} /> السابق
-              </button>
-              <button
-                disabled={page >= data.totalPages}
-                onClick={() => setPage((p) => p + 1)}
-                className="px-3 py-1.5 border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50 flex items-center gap-1"
-              >
-                التالي <ChevronLeft size={16} />
-              </button>
-            </div>
-          </div>
+        {!isLoading && rows.length > 0 && (
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            from={from}
+            to={to}
+            onPage={setPage}
+            isFetching={isFetching}
+          />
         )}
-      </div>
+      </section>
 
       {formOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 m-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-800">
-                {editing ? "تعديل السجل" : "إضافة سجل جديد"}
-              </h2>
+        <div
+          className="dialog-overlay"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setFormOpen(false);
+          }}
+        >
+          <div
+            className="dialog dialog--wide"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={dialogTitleId}
+            ref={panelRef}
+          >
+            <div className="dialog-head">
+              <span className="dialog-icon" aria-hidden="true">
+                <Icon size={18} />
+              </span>
+              <div>
+                <h2 className="dialog-title" id={dialogTitleId}>
+                  {editing ? "تعديل السجل" : "إضافة سجل جديد"}
+                </h2>
+                <p className="dialog-text">{editing ? editing.name : title}</p>
+              </div>
               <button
+                type="button"
+                className="icon-btn"
+                aria-label="إغلاق"
                 onClick={() => setFormOpen(false)}
-                className="text-gray-400 hover:text-gray-600"
+                style={{ marginInlineStart: "auto", flex: "none" }}
               >
-                <X size={20} />
+                <X size={16} aria-hidden="true" />
               </button>
             </div>
 
-            {formErrors.length > 0 && (
-              <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm space-y-1">
-                {formErrors.map((err, i) => (
-                  <div key={i}>• {err}</div>
-                ))}
-              </div>
-            )}
-
             <form
-              onSubmit={(e) => {
-                e.preventDefault();
+              onSubmit={(event) => {
+                event.preventDefault();
                 setFormErrors([]);
                 if (!(formData.name ?? "").trim()) {
                   setFormErrors(["الاسم مطلوب"]);
@@ -340,58 +405,68 @@ export default function ReferenceDataManager({
                 }
                 saveMutation.mutate();
               }}
-              className="space-y-4"
             >
-              {fields.map((field) => (
-                <div key={field.key}>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {field.label}
-                    {field.required ? " *" : ""}
-                  </label>
-                  {field.textarea ? (
-                    <textarea
-                      value={formData[field.key] ?? ""}
-                      onChange={(e) =>
-                        setFormData({ ...formData, [field.key]: e.target.value })
-                      }
-                      placeholder={field.placeholder}
-                      maxLength={field.maxLength ?? 2000}
-                      rows={3}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                    />
-                  ) : (
-                    <input
-                      type="text"
-                      value={formData[field.key] ?? ""}
-                      onChange={(e) =>
-                        setFormData({ ...formData, [field.key]: e.target.value })
-                      }
-                      placeholder={field.placeholder}
-                      maxLength={field.maxLength ?? 255}
-                      required={field.required}
-                      className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none ${
-                        field.mono ? "font-mono" : ""
-                      }`}
-                    />
-                  )}
-                </div>
-              ))}
+              <div className="dialog-body">
+                {formErrors.length > 0 && (
+                  <div className="alert alert-danger" role="alert" style={{ marginBottom: 14 }}>
+                    <div>
+                      {formErrors.map((message, index) => (
+                        <div key={index}>{message}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-              <div className="flex gap-3 pt-4 border-t border-gray-100">
-                <button
-                  type="submit"
-                  disabled={saveMutation.isPending}
-                  className="bg-primary-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-primary-700 disabled:opacity-60 flex items-center gap-2"
-                >
-                  <Save size={18} />
-                  {saveMutation.isPending ? "جارٍ الحفظ..." : "حفظ"}
-                </button>
+                <div className="form-stack" style={{ gap: 14 }}>
+                  {fields.map((field, index) => (
+                    <div className="field" key={field.key}>
+                      <label className="label" htmlFor={`ref-${entity}-${field.key}`}>
+                        {field.label}
+                        {field.required ? <span className="req">*</span> : null}
+                      </label>
+                      {field.textarea ? (
+                        <textarea
+                          id={`ref-${entity}-${field.key}`}
+                          className="textarea"
+                          value={formData[field.key] ?? ""}
+                          onChange={(event) =>
+                            setFormData({ ...formData, [field.key]: event.target.value })
+                          }
+                          placeholder={field.placeholder}
+                          maxLength={field.maxLength ?? 2000}
+                          rows={3}
+                        />
+                      ) : (
+                        <input
+                          id={`ref-${entity}-${field.key}`}
+                          ref={index === 0 ? firstFieldRef : undefined}
+                          className={`input${field.mono ? " mono" : ""}`}
+                          type="text"
+                          value={formData[field.key] ?? ""}
+                          onChange={(event) =>
+                            setFormData({ ...formData, [field.key]: event.target.value })
+                          }
+                          placeholder={field.placeholder}
+                          maxLength={field.maxLength ?? 255}
+                          spellCheck={false}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="dialog-foot">
                 <button
                   type="button"
+                  className="btn btn-ghost"
                   onClick={() => setFormOpen(false)}
-                  className="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg font-medium hover:bg-gray-200"
                 >
                   إلغاء
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={saveMutation.isPending}>
+                  <Save aria-hidden="true" />
+                  {saveMutation.isPending ? "جارٍ الحفظ…" : "حفظ"}
                 </button>
               </div>
             </form>
@@ -399,41 +474,19 @@ export default function ReferenceDataManager({
         </div>
       )}
 
-      {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 m-4">
-            <div className="flex items-start gap-3 mb-4">
-              <div className="bg-red-100 text-red-600 p-2 rounded-full">
-                <AlertTriangle size={22} />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-gray-800">تأكيد الحذف</h2>
-                <p className="text-gray-600 text-sm mt-1">
-                  سيتم حذف <span className="font-bold">{deleteTarget.name}</span> نهائياً.
-                  لا يمكن الحذف إذا كان السجل مرتبطاً بوظيفة أو منصب.
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-3 pt-4 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={() => setDeleteTarget(null)}
-                className="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg font-medium hover:bg-gray-200"
-              >
-                إلغاء
-              </button>
-              <button
-                type="button"
-                disabled={deleteMutation.isPending}
-                onClick={() => deleteMutation.mutate(deleteTarget)}
-                className="bg-red-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-red-700 disabled:opacity-60"
-              >
-                {deleteMutation.isPending ? "جارٍ الحذف..." : "تأكيد الحذف"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="حذف السجل"
+        text={
+          <>
+            سيتم حذف <strong>{deleteTarget?.name}</strong> نهائياً. لا يمكن الحذف إذا
+            كان السجل مرتبطاً بوظيفة أو منصب.
+          </>
+        }
+        pending={deleteMutation.isPending}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

@@ -1,6 +1,5 @@
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
 import api from "@/services/api";
 import { useAuthStore } from "@/store/authStore";
 import { extractErrorMessages } from "@/lib/errorDetails";
@@ -10,12 +9,20 @@ import {
   Plus,
   Pencil,
   Trash2,
-  Search,
-  ArrowLeft,
-  AlertTriangle,
-  X,
   Save,
+  X,
+  SearchX,
+  AlertTriangle,
+  AlertCircle,
 } from "lucide-react";
+import PageHeader from "@/components/ui/PageHeader";
+import Pagination from "@/components/ui/Pagination";
+import SearchInput from "@/components/ui/SearchInput";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { EmptyState, ErrorState, TableSkeleton } from "@/components/ui/StateViews";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useListParams } from "@/hooks/useListParams";
+import { formatDate, formatNumber } from "@/lib/format";
 
 /**
  * Sprint 6 / GAP-FE-009 — إدارة المؤسسات التدريبية.
@@ -30,24 +37,49 @@ interface Institution {
   updatedAt: string;
 }
 
+const PAGE_SIZES = [10, 25, 50];
+
 export default function TrainingInstitutions() {
   const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
   const canWrite =
     user?.role === "admin" || user?.role === "hr_manager" || user?.role === "training_manager";
 
-  const [search, setSearch] = useState("");
+  const { q, page, limit, setQ, setPage, setLimit } = useListParams({
+    defaultLimit: PAGE_SIZES[0],
+  });
+  const [searchInput, setSearchInput] = useState(q);
+  const debouncedInput = useDebouncedValue(searchInput, 300);
+
   const [editing, setEditing] = useState<Institution | null>(null);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
+  const [nameError, setNameError] = useState<string | null>(null);
   const [formErrors, setFormErrors] = useState<string[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<Institution | null>(null);
   const [deleteErrors, setDeleteErrors] = useState<string[]>([]);
 
+  const dialogTitleId = useId();
+  const firstFieldRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const next = debouncedInput.trim();
+    if (next !== q) setQ(next);
+  }, [debouncedInput, q, setQ]);
+
+  useEffect(() => {
+    setSearchInput(q);
+  }, [q]);
+
+  useEffect(() => {
+    setDeleteTarget(null);
+    setDeleteErrors([]);
+  }, [q, page, limit]);
+
   const institutionsQuery = useQuery<Institution[]>({
-    queryKey: ["training-institutions", search],
+    queryKey: ["training-institutions", q],
     queryFn: async () =>
-      (await api.get("/training/institutions", { params: search ? { search } : {} })).data,
+      (await api.get("/training/institutions", { params: q ? { search: q } : {} })).data,
   });
 
   const invalidate = () => {
@@ -96,6 +128,7 @@ export default function TrainingInstitutions() {
     setCreating(false);
     setEditing(null);
     setName("");
+    setNameError(null);
     setFormErrors([]);
   }
 
@@ -103,6 +136,7 @@ export default function TrainingInstitutions() {
     setCreating(true);
     setEditing(null);
     setName("");
+    setNameError(null);
     setFormErrors([]);
   }
 
@@ -110,176 +144,320 @@ export default function TrainingInstitutions() {
     setEditing(institution);
     setCreating(false);
     setName(institution.name);
+    setNameError(null);
     setFormErrors([]);
   }
 
-  const institutions = institutionsQuery.data ?? [];
+  // إغلاق نافذة النموذج بـ Escape وإعادة التركيز إلى العنصر السابق
   const formOpen = creating || editing !== null;
+  useEffect(() => {
+    if (!formOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    firstFieldRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeForm();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      previous?.focus?.();
+    };
+  }, [formOpen]);
+
+  const institutions = institutionsQuery.data ?? [];
+  const total = institutions.length;
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const currentPage = Math.min(page, totalPages);
+  const rows = institutions.slice((currentPage - 1) * limit, currentPage * limit);
+  const from = total === 0 ? 0 : (currentPage - 1) * limit + 1;
+  const to = Math.min(currentPage * limit, total);
   const saving = createMutation.isPending || updateMutation.isPending;
 
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages, setPage]);
+
+  const clearSearch = () => {
+    setSearchInput("");
+    setQ("");
+  };
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <Link
-            to="/training"
-            className="text-primary-600 hover:text-primary-800 flex items-center gap-2"
-          >
-            <ArrowLeft size={18} /> التدريب
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800">المؤسسات التدريبية</h1>
-            <p className="text-gray-600">إدارة المؤسسات التي تُنظَّم فيها الدورات</p>
-          </div>
-        </div>
-        {canWrite && (
-          <button
-            onClick={openCreate}
-            className="bg-primary-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium hover:bg-primary-700 transition"
-          >
-            <Plus size={18} /> مؤسسة جديدة
-          </button>
-        )}
-      </div>
+    <div className="stack">
+      <PageHeader
+        title="المؤسسات التدريبية"
+        subtitle="إدارة المؤسسات التي تُنظَّم فيها الدورات"
+        backTo="/training"
+        backLabel="التدريب"
+        actions={
+          canWrite ? (
+            <button type="button" className="btn btn-primary" onClick={openCreate}>
+              <Plus aria-hidden="true" />
+              مؤسسة جديدة
+            </button>
+          ) : undefined
+        }
+      />
 
-      <div className="bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-100">
-          <div className="relative max-w-sm">
-            <Search
-              size={18}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
-            />
-            <input
-              type="text"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="بحث بالاسم..."
-              className="w-full pr-10 pl-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-            />
-          </div>
+      {institutionsQuery.error && (
+        <ErrorState
+          title="تعذّر تحميل المؤسسات"
+          message={extractErrorMessages(institutionsQuery.error).join(" — ")}
+          onRetry={() => institutionsQuery.refetch()}
+        />
+      )}
+
+      <section className="card">
+        <div className="card-head">
+          <h2 className="card-title">المؤسسات</h2>
+          <span className="card-sub">{formatNumber(total)} مؤسسة</span>
         </div>
 
-        {institutionsQuery.isLoading ? (
-          <div className="text-center py-12 text-gray-500">جاري تحميل المؤسسات...</div>
-        ) : institutionsQuery.error ? (
-          <div className="text-center py-12 text-red-600">
-            {extractErrorMessages(institutionsQuery.error).join(" — ")}
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-3 text-sm font-semibold text-gray-700">الاسم</th>
-                  <th className="px-6 py-3 text-sm font-semibold text-gray-700">الإصدار</th>
-                  <th className="px-6 py-3 text-sm font-semibold text-gray-700">إجراءات</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {institutions.map((institution) => (
-                  <tr key={institution.id} className="hover:bg-gray-50 transition">
-                    <td className="px-6 py-4 font-medium flex items-center gap-2">
-                      <Building2 size={16} className="text-primary-500" />
-                      {institution.name}
+        <div className="toolbar">
+          <SearchInput
+            value={searchInput}
+            onChange={setSearchInput}
+            placeholder="ابحث بالاسم…"
+            label="بحث في المؤسسات التدريبية"
+          />
+
+          <select
+            className="select"
+            value={limit}
+            onChange={(event) => setLimit(Number(event.target.value))}
+            aria-label="عدد المؤسسات في الصفحة"
+          >
+            {PAGE_SIZES.map((size) => (
+              <option key={size} value={size}>
+                {size} في الصفحة
+              </option>
+            ))}
+          </select>
+
+          {(q || searchInput) && (
+            <button type="button" className="clear-link" onClick={clearSearch}>
+              مسح البحث
+            </button>
+          )}
+
+          {q && (
+            <div className="chips">
+              <span className="chip">
+                البحث: {q}
+                <button type="button" aria-label="إزالة فلتر البحث" onClick={clearSearch}>
+                  <X aria-hidden="true" />
+                </button>
+              </span>
+            </div>
+          )}
+        </div>
+
+        <div className="table-wrap">
+          <table className="data-table data-table--dense">
+            <thead>
+              <tr>
+                <th scope="col">الاسم</th>
+                <th scope="col" className="col-optional">
+                  تاريخ الإضافة
+                </th>
+                <th scope="col" className="col-compact">
+                  الإصدار
+                </th>
+                <th scope="col">
+                  <span className="sr-only">إجراءات</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {institutionsQuery.isLoading && (
+                <TableSkeleton rows={6} cols={4} widths={[200, 120, 40, 0]} />
+              )}
+
+              {!institutionsQuery.isLoading &&
+                rows.map((institution) => (
+                  <tr key={institution.id}>
+                    <td>
+                      <span className="cell-person">
+                        <span
+                          className="kpi-icon"
+                          aria-hidden="true"
+                          style={{ width: 26, height: 26, flex: "0 0 26px" }}
+                        >
+                          <Building2 size={14} />
+                        </span>
+                        <span className="person-name">{institution.name}</span>
+                      </span>
                     </td>
-                    <td className="px-6 py-4 text-gray-600 text-sm">v{institution.version}</td>
-                    <td className="px-6 py-4">
+                    <td className="mono col-optional">{formatDate(institution.createdAt)}</td>
+                    <td className="mono col-compact">v{institution.version}</td>
+                    <td className="col-actions">
                       {canWrite && (
-                        <div className="flex items-center gap-2">
+                        <div className="row-actions">
                           <button
-                            onClick={() => openEdit(institution)}
-                            className="text-primary-600 hover:text-primary-800 p-1"
+                            type="button"
+                            className="icon-btn icon-btn--sm"
+                            aria-label={`تعديل ${institution.name}`}
                             title="تعديل"
+                            onClick={() => openEdit(institution)}
                           >
-                            <Pencil size={18} />
+                            <Pencil aria-hidden="true" />
                           </button>
                           <button
+                            type="button"
+                            className="icon-btn icon-btn--sm danger"
+                            aria-label={`حذف ${institution.name}`}
+                            title="حذف"
                             onClick={() => {
                               setDeleteTarget(institution);
                               setDeleteErrors([]);
                             }}
-                            className="text-red-600 hover:text-red-800 p-1"
-                            title="حذف"
                           >
-                            <Trash2 size={18} />
+                            <Trash2 aria-hidden="true" />
                           </button>
                         </div>
                       )}
                     </td>
                   </tr>
                 ))}
-              </tbody>
-            </table>
-          </div>
+            </tbody>
+          </table>
+        </div>
+
+        {!institutionsQuery.isLoading && rows.length === 0 && (
+          <EmptyState
+            icon={q ? SearchX : Building2}
+            title={q ? "لا نتائج مطابقة" : "لا توجد مؤسسات تدريبية"}
+            text={
+              q
+                ? `لم نجد مؤسسة تطابق «${q}». جرّب جزءاً من الاسم أو امسح البحث.`
+                : "أضف أول مؤسسة لتظهر في قائمة اختيار المؤسسة داخل نماذج الدورات."
+            }
+            action={
+              q ? (
+                <button type="button" className="btn btn-ghost btn-sm" onClick={clearSearch}>
+                  مسح البحث
+                </button>
+              ) : canWrite ? (
+                <button type="button" className="btn btn-primary btn-sm" onClick={openCreate}>
+                  <Plus aria-hidden="true" />
+                  مؤسسة جديدة
+                </button>
+              ) : undefined
+            }
+          />
         )}
-        {!institutionsQuery.isLoading && !institutions.length && (
-          <div className="text-center py-12 text-gray-500">لا توجد مؤسسات تدريبية</div>
+
+        {!institutionsQuery.isLoading && rows.length > 0 && (
+          <Pagination
+            page={currentPage}
+            totalPages={totalPages}
+            total={total}
+            from={from}
+            to={to}
+            onPage={setPage}
+            isFetching={institutionsQuery.isFetching}
+          />
         )}
-      </div>
+      </section>
 
       {formOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 m-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-800">
-                {editing ? "تعديل مؤسسة تدريبية" : "إضافة مؤسسة تدريبية"}
-              </h2>
-              <button onClick={closeForm} className="text-gray-400 hover:text-gray-600">
-                <X size={20} />
+        <div
+          className="dialog-overlay"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeForm();
+          }}
+        >
+          <div
+            className="dialog dialog--wide"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={dialogTitleId}
+          >
+            <div className="dialog-head">
+              <span className="dialog-icon" aria-hidden="true">
+                <Building2 size={18} />
+              </span>
+              <div>
+                <h2 className="dialog-title" id={dialogTitleId}>
+                  {editing ? "تعديل مؤسسة تدريبية" : "إضافة مؤسسة تدريبية"}
+                </h2>
+                <p className="dialog-text">اسم المؤسسة يظهر في نماذج الدورات التدريبية.</p>
+              </div>
+              <button
+                type="button"
+                className="icon-btn"
+                aria-label="إغلاق"
+                onClick={closeForm}
+                style={{ marginInlineStart: "auto", flex: "none" }}
+              >
+                <X aria-hidden="true" />
               </button>
             </div>
-
-            {formErrors.length > 0 && (
-              <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm space-y-1">
-                {formErrors.map((message, index) => (
-                  <div key={index}>• {message}</div>
-                ))}
-              </div>
-            )}
 
             <form
               onSubmit={(event) => {
                 event.preventDefault();
                 setFormErrors([]);
                 if (!name.trim()) {
-                  setFormErrors(["اسم المؤسسة مطلوب"]);
+                  setNameError("اسم المؤسسة مطلوب");
+                  firstFieldRef.current?.focus();
                   return;
                 }
                 if (editing) updateMutation.mutate();
                 else createMutation.mutate();
               }}
-              className="space-y-4"
+              noValidate
             >
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  اسم المؤسسة *
-                </label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  maxLength={255}
-                  required
-                  autoFocus
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                />
+              <div className="dialog-body">
+                {formErrors.length > 0 && (
+                  <div className="alert alert-danger" role="alert" style={{ marginBottom: 14 }}>
+                    <AlertCircle aria-hidden="true" />
+                    <div>
+                      {formErrors.map((message, index) => (
+                        <div key={index}>{message}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="field">
+                  <label className="label" htmlFor="institution-name">
+                    اسم المؤسسة <span className="req">*</span>
+                  </label>
+                  <input
+                    id="institution-name"
+                    ref={firstFieldRef}
+                    type="text"
+                    className={`input${nameError ? " is-invalid" : ""}`}
+                    value={name}
+                    onChange={(event) => {
+                      setName(event.target.value);
+                      if (nameError) setNameError(null);
+                    }}
+                    maxLength={255}
+                    aria-invalid={nameError ? "true" : undefined}
+                    aria-describedby={nameError ? "institution-name-err" : undefined}
+                    required
+                  />
+                  {nameError && (
+                    <p className="err" id="institution-name-err">
+                      <AlertCircle aria-hidden="true" />
+                      {nameError}
+                    </p>
+                  )}
+                </div>
               </div>
 
-              <div className="flex gap-3 pt-4 border-t border-gray-100">
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="bg-primary-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-primary-700 disabled:opacity-60 flex items-center gap-2"
-                >
-                  <Save size={18} />
-                  {saving ? "جارٍ الحفظ..." : "حفظ"}
-                </button>
-                <button
-                  type="button"
-                  onClick={closeForm}
-                  className="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg font-medium hover:bg-gray-200"
-                >
+              <div className="dialog-foot">
+                <button type="button" className="btn btn-ghost" onClick={closeForm}>
                   إلغاء
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={saving}>
+                  <Save aria-hidden="true" />
+                  {saving ? "جارٍ الحفظ…" : "حفظ"}
                 </button>
               </div>
             </form>
@@ -287,64 +465,35 @@ export default function TrainingInstitutions() {
         </div>
       )}
 
-      {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 m-4">
-            <div className="flex items-start gap-3 mb-4">
-              <div className="bg-red-100 text-red-600 p-2 rounded-full">
-                <AlertTriangle size={22} />
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-bold text-gray-800">تأكيد الحذف</h2>
-                  <button
-                    onClick={() => {
-                      setDeleteTarget(null);
-                      setDeleteErrors([]);
-                    }}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
-                    <X size={20} />
-                  </button>
-                </div>
-                <p className="text-gray-600 text-sm mt-1">
-                  سيُحذف <span className="font-bold">{deleteTarget.name}</span> نهائياً. لا يمكن
-                  الحذف إذا كانت هناك دورات تدريبية مرتبطة بها.
-                </p>
-              </div>
-            </div>
-
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="تأكيد الحذف"
+        text={
+          <>
+            سيُحذف <strong>{deleteTarget?.name}</strong> نهائياً. لا يمكن الحذف إذا كانت هناك دورات
+            تدريبية مرتبطة بها.
             {deleteErrors.length > 0 && (
-              <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm space-y-1">
-                {deleteErrors.map((message, index) => (
-                  <div key={index}>• {message}</div>
-                ))}
-              </div>
+              <span className="alert alert-danger" role="alert" style={{ marginTop: 10 }}>
+                <AlertTriangle aria-hidden="true" />
+                <span>
+                  {deleteErrors.map((message, index) => (
+                    <span key={index} style={{ display: "block" }}>
+                      {message}
+                    </span>
+                  ))}
+                </span>
+              </span>
             )}
-
-            <div className="flex gap-3 pt-4 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={() => {
-                  setDeleteTarget(null);
-                  setDeleteErrors([]);
-                }}
-                className="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg font-medium hover:bg-gray-200"
-              >
-                إلغاء
-              </button>
-              <button
-                type="button"
-                disabled={deleteMutation.isPending}
-                onClick={() => deleteMutation.mutate(deleteTarget)}
-                className="bg-red-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-red-700 disabled:opacity-60"
-              >
-                {deleteMutation.isPending ? "جارٍ الحذف..." : "تأكيد الحذف"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </>
+        }
+        confirmLabel="تأكيد الحذف"
+        pending={deleteMutation.isPending}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget)}
+        onClose={() => {
+          setDeleteTarget(null);
+          setDeleteErrors([]);
+        }}
+      />
     </div>
   );
 }

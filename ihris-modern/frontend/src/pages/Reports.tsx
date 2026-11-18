@@ -1,9 +1,32 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "@/services/api";
 import { toast } from "sonner";
-import { Plus, Edit, Trash2, Play, Clock } from "lucide-react";
+import {
+  Plus,
+  Edit,
+  Trash2,
+  Play,
+  Eye,
+  Power,
+  PowerOff,
+  FileText,
+  SearchX,
+} from "lucide-react";
+import PageHeader from "@/components/ui/PageHeader";
+import SearchInput from "@/components/ui/SearchInput";
+import Pagination from "@/components/ui/Pagination";
+import Pill from "@/components/ui/Pill";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import {
+  EmptyState,
+  ErrorState,
+  TableSkeleton,
+} from "@/components/ui/StateViews";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useListParams } from "@/hooks/useListParams";
+import { formatDate, formatNumber } from "@/lib/format";
 
 interface ReportDefinition {
   id: number;
@@ -19,7 +42,9 @@ interface ReportDefinition {
     firstname: string;
     lastname: string;
   };
-  executions: Array<{
+  /** يوفّرها الخادم في قائمة التقارير. */
+  _count?: { executions: number };
+  executions?: Array<{
     id: number;
     status: string;
     startedAt: string;
@@ -34,26 +59,76 @@ interface ReportResponse {
   totalPages: number;
 }
 
+const PAGE_SIZES = [10, 25, 50];
+
+const TYPE_LABELS: Record<string, string> = {
+  list: "قائمة",
+  table: "جدول",
+  pie: "رسم بياني دائري",
+  bar: "رسم بياني شريطي",
+  line: "رسم بياني خطي",
+};
+
+function typeLabel(type: string) {
+  return TYPE_LABELS[type] ?? type;
+}
+
 export default function Reports() {
-  const [search, setSearch] = useState("");
-  const [isEnabledFilter, setIsEnabledFilter] = useState<string>("all");
-  const [showForm, setShowForm] = useState(false);
-  const [editingReport, setEditingReport] = useState<ReportDefinition | null>(null);
+  const { q, page, limit, setQ, setPage, setLimit } = useListParams({
+    defaultLimit: PAGE_SIZES[0],
+  });
+  const [params, setParams] = useSearchParams();
+
+  const [searchInput, setSearchInput] = useState(q);
+  const debouncedInput = useDebouncedValue(searchInput, 300);
+
+  // فلتر الحالة محفوظ في عنوان URL أيضاً حتى يصمد مع التحديث وزر الرجوع.
+  const isEnabledFilter = params.get("enabled") ?? "all";
+  const setEnabledFilter = (value: string) => {
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (!value || value === "all") next.delete("enabled");
+        else next.set("enabled", value);
+        return next;
+      },
+      { replace: true }
+    );
+  };
+
+  const [deleteTarget, setDeleteTarget] = useState<ReportDefinition | null>(
+    null
+  );
+
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const { data, isLoading, error } = useQuery<ReportResponse>({
-    queryKey: ["reports", search, isEnabledFilter],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (search) params.set("search", search);
-      if (isEnabledFilter && isEnabledFilter !== "all") params.set("isEnabled", isEnabledFilter);
-      params.set("page", "1");
-      params.set("limit", "50");
-      const res = await api.get(`/reports?${params.toString()}`);
-      return res.data;
-    },
-  });
+  // إدخال المستخدم ← عنوان URL (بعد توقّف الكتابة)
+  useEffect(() => {
+    const next = debouncedInput.trim();
+    if (next !== q) setQ(next);
+  }, [debouncedInput, q, setQ]);
+
+  // تغيّر خارجي (زر الرجوع) ← حقل البحث
+  useEffect(() => {
+    setSearchInput(q);
+  }, [q]);
+
+  const { data, isLoading, isFetching, error, refetch } =
+    useQuery<ReportResponse>({
+      queryKey: ["reports", q, isEnabledFilter, page, limit],
+      queryFn: async () => {
+        const searchParams = new URLSearchParams();
+        if (q) searchParams.set("search", q);
+        if (isEnabledFilter && isEnabledFilter !== "all") {
+          searchParams.set("isEnabled", isEnabledFilter);
+        }
+        searchParams.set("page", String(page));
+        searchParams.set("limit", String(limit));
+        const res = await api.get(`/reports?${searchParams.toString()}`);
+        return res.data;
+      },
+    });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -62,6 +137,7 @@ export default function Reports() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["reports"] });
+      setDeleteTarget(null);
       toast.success("تم حذف التقرير بنجاح");
     },
     onError: (error: any) => {
@@ -97,259 +173,308 @@ export default function Reports() {
     },
   });
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-600">جاري تحميل التقارير...</p>
-        </div>
-      </div>
-    );
-  }
+  const rows = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 1;
+  const from = total === 0 ? 0 : (page - 1) * limit + 1;
+  const to = Math.min(page * limit, total);
 
-  if (error) {
-    console.error("❌ Reports error:", error);
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
-        <div className="bg-white p-8 rounded-xl shadow border border-red-100 max-w-md text-center">
-          <div className="text-red-600 font-bold mb-2">⚠️ حدث خطأ في تحميل التقارير</div>
-          <p className="text-gray-600 text-sm mb-4">{error instanceof Error ? error.message : String(error)}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700"
-          >
-            إعادة تحميل الصفحة
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const hasFilter = Boolean(q) || isEnabledFilter !== "all";
+  const toggling = disableMutation.isPending || enableMutation.isPending;
+
+  const clearFilters = () => {
+    setSearchInput("");
+    setQ("");
+    setEnabledFilter("all");
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">إدارة التقارير المخصصة</h1>
-          <p className="text-gray-600">إنشاء وتعديل وعرض التقارير المخصصة</p>
-        </div>
-
-        <div className="flex gap-2">
-          <button
-            onClick={() => {
-              setEditingReport(null);
-              setShowForm(true);
+    <>
+      <PageHeader
+        title="إدارة التقارير المخصصة"
+        subtitle={
+          isLoading
+            ? "جاري تحميل التقارير…"
+            : `${formatNumber(total)} تقرير مخصص`
+        }
+        actions={
+          <a
+            className="btn btn-primary"
+            href="/reports/new"
+            onClick={(event) => {
+              event.preventDefault();
+              navigate("/reports/new");
             }}
-            className="bg-primary-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium hover:bg-primary-700 transition"
           >
-            <Plus size={18} /> تقرير جديد
-          </button>
-        </div>
-      </div>
+            <Plus aria-hidden="true" />
+            تقرير جديد
+          </a>
+        }
+      />
 
-      <div className="bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-100">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="البحث باسم التقرير..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-              />
-              <select
-                value={isEnabledFilter}
-                onChange={(e) => setIsEnabledFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-              >
-                <option value="all">جميع الحالات</option>
-                <option value="true">مفعل فقط</option>
-                <option value="false">معطل فقط</option>
-              </select>
-            </div>
-          </div>
-        </div>
-        <table className="w-full text-left">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="px-6 py-3 text-sm font-semibold text-gray-700">اسم التقرير</th>
-              <th className="px-6 py-3 text-sm font-semibold text-gray-700">النوع</th>
-              <th className="px-6 py-3 text-sm font-semibold text-gray-700">الحالة</th>
-              <th className="px-6 py-3 text-sm font-semibold text-gray-700">المcreatedBy</th>
-              <th className="px-6 py-3 text-sm font-semibold text-gray-700">آخر تعديل</th>
-              <th className="px-6 py-3 text-sm font-semibold text-gray-700">الإجراءات</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {(data?.data || []).map((report: ReportDefinition) => (
-              <tr key={report.id} className="hover:bg-gray-50 transition">
-                <td className="px-6 py-4">
-                  <div className="font-medium">{report.name}</div>
-                  {report.description && (
-                    <div className="text-xs text-gray-500">{report.description}</div>
-                  )}
-                </td>
-                <td className="px-6 py-4 text-gray-600 text-sm">{report.type}</td>
-                <td className="px-6 py-4">
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      report.isEnabled
-                        ? "bg-green-100 text-green-700"
-                        : "bg-gray-100 text-gray-700"
-                    }`}
-                  >
-                    {report.isEnabled ? "مفعل" : "معطل"}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-gray-600 text-sm">
-                  {report.createdByUser.firstname} {report.createdByUser.lastname}
-                </td>
-                <td className="px-6 py-4 text-gray-600 text-sm">
-                  {new Date(report.updatedAt).toLocaleDateString("ar-SA")}
-                </td>
-                <td className="px-6 py-4 flex gap-2">
-                  <button
-                    onClick={() => navigate(`/reports/${report.id}/execute`)}
-                    className="text-primary-600 hover:text-primary-800 text-sm flex items-center gap-1"
-                  >
-                    <Play size={14} /> تشغيل
-                  </button>
-                  <button
-                    onClick={() => {
-                      setEditingReport(report);
-                      setShowForm(true);
-                    }}
-                    className="text-blue-600 hover:text-blue-800 text-sm flex items-center gap-1"
-                  >
-                    <Edit size={14} /> تعديل
-                  </button>
-                  {report.isEnabled ? (
-                    <button
-                      onClick={() => disableMutation.mutate(report.id)}
-                      className="text-orange-600 hover:text-orange-800 text-sm flex items-center gap-1"
-                    >
-                      <Clock size={14} /> تعطيل
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => enableMutation.mutate(report.id)}
-                      className="text-green-600 hover:text-green-800 text-sm flex items-center gap-1"
-                    >
-                      <Play size={14} /> تفعيل
-                    </button>
-                  )}
-                  <button
-                    onClick={() => {
-                      if (confirm("هل أنت متأكد من حذف هذا التقرير؟")) {
-                        deleteMutation.mutate(report.id);
-                      }
-                    }}
-                    className="text-red-600 hover:text-red-800 text-sm flex items-center gap-1"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {!data?.data?.length && (
-        <div className="text-center py-12 text-gray-500">
-          لا توجد تقارير متاحة
-          <button
-            onClick={() => {
-              setEditingReport(null);
-              setShowForm(true);
-            }}
-            className="mt-4 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700"
-          >
-            <Plus size={18} /> إنشاء تقرير أول
-          </button>
+      {error && (
+        <div style={{ marginBottom: 18 }}>
+          <ErrorState
+            title="حدث خطأ في تحميل التقارير"
+            message={error instanceof Error ? error.message : String(error)}
+            onRetry={() => refetch()}
+          />
         </div>
       )}
 
-      {/* نموذج إضافة/تعديل تقرير */}
-      {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full p-6 m-4">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-gray-800">
-                {editingReport ? "تعديل تقرير" : "إضافة تقرير جديد"}
-              </h2>
-              <button
-                onClick={() => {
-                  setShowForm(false);
-                  setEditingReport(null);
-                }}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                ✕
-              </button>
-            </div>
-            <form className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    اسم التقرير *
-                  </label>
-                  <input
-                    type="text"
-                    defaultValue={editingReport?.name || ""}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    نوع التقرير *
-                  </label>
-                  <select
-                    defaultValue={editingReport?.type || "list"}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                  >
-                    <option value="list">قائمة</option>
-                    <option value="table">جدول</option>
-                    <option value="pie">رسم بياني دائري</option>
-                    <option value="bar">رسم بياني شريطي</option>
-                    <option value="line">رسم بياني خطي</option>
-                  </select>
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    الوصف
-                  </label>
-                  <textarea
-                    defaultValue={editingReport?.description || ""}
-                    rows={3}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-3 pt-4 border-t border-gray-100">
+      <section className="card">
+        <div className="toolbar">
+          <SearchInput
+            value={searchInput}
+            onChange={setSearchInput}
+            placeholder="البحث باسم التقرير…"
+            label="بحث في التقارير"
+          />
+
+          <select
+            className="select"
+            value={isEnabledFilter}
+            onChange={(e) => setEnabledFilter(e.target.value)}
+            aria-label="تصفية حسب الحالة"
+          >
+            <option value="all">جميع الحالات</option>
+            <option value="true">مفعل فقط</option>
+            <option value="false">معطل فقط</option>
+          </select>
+
+          <select
+            className="select"
+            value={limit}
+            onChange={(e) => setLimit(Number(e.target.value))}
+            aria-label="عدد السجلات في الصفحة"
+          >
+            {PAGE_SIZES.map((size) => (
+              <option key={size} value={size}>
+                {size} في الصفحة
+              </option>
+            ))}
+          </select>
+
+          {(q || searchInput || isEnabledFilter !== "all") && (
+            <button type="button" className="clear-link" onClick={clearFilters}>
+              مسح الفلاتر
+            </button>
+          )}
+        </div>
+
+        <div className="table-wrap">
+          <table className="data-table data-table--dense">
+            <thead>
+              <tr>
+                <th scope="col">اسم التقرير</th>
+                <th scope="col" className="col-optional">
+                  النوع
+                </th>
+                <th scope="col">الحالة</th>
+                <th scope="col" className="col-optional">
+                  المنشئ
+                </th>
+                <th scope="col" className="col-compact">
+                  التنفيذات
+                </th>
+                <th scope="col" className="col-compact">
+                  آخر تعديل
+                </th>
+                <th scope="col" className="col-actions">
+                  <span className="sr-only">إجراءات</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading && (
+                <TableSkeleton
+                  rows={6}
+                  cols={7}
+                  widths={[160, 60, 60, 110, 50, 90, 0]}
+                />
+              )}
+
+              {!isLoading &&
+                rows.map((report) => {
+                  const executions =
+                    report._count?.executions ?? report.executions?.length;
+                  return (
+                    <tr key={report.id}>
+                      <td>
+                        <div className="person-meta">
+                          <span className="person-name">{report.name}</span>
+                          {report.description && (
+                            <span className="person-sub">
+                              {report.description}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="col-optional">
+                        <Pill tone="mute">{typeLabel(report.type)}</Pill>
+                      </td>
+                      <td>
+                        <Pill tone={report.isEnabled ? "ok" : "mute"}>
+                          {report.isEnabled ? "مفعل" : "معطل"}
+                        </Pill>
+                      </td>
+                      <td className="col-optional">
+                        {report.createdByUser.firstname}{" "}
+                        {report.createdByUser.lastname}
+                      </td>
+                      <td className="mono col-compact">
+                        {executions === undefined
+                          ? "—"
+                          : formatNumber(executions)}
+                      </td>
+                      <td className="mono col-compact">
+                        {formatDate(report.updatedAt)}
+                      </td>
+                      <td className="col-actions">
+                        <div className="row-actions">
+                          <a
+                            className="icon-btn icon-btn--sm"
+                            href={`/reports/${report.id}`}
+                            aria-label={`عرض ${report.name}`}
+                            title="عرض"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              navigate(`/reports/${report.id}`);
+                            }}
+                          >
+                            <Eye aria-hidden="true" />
+                          </a>
+                          <a
+                            className="icon-btn icon-btn--sm"
+                            href={`/reports/${report.id}/edit`}
+                            aria-label={`تعديل ${report.name}`}
+                            title="تعديل"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              navigate(`/reports/${report.id}/edit`);
+                            }}
+                          >
+                            <Edit aria-hidden="true" />
+                          </a>
+                          <a
+                            className="icon-btn icon-btn--sm"
+                            href={`/reports/${report.id}/execute`}
+                            aria-label={`تشغيل ${report.name}`}
+                            title="تشغيل"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              navigate(`/reports/${report.id}/execute`);
+                            }}
+                          >
+                            <Play aria-hidden="true" />
+                          </a>
+                          <button
+                            type="button"
+                            className="icon-btn icon-btn--sm"
+                            aria-label={
+                              report.isEnabled
+                                ? `تعطيل ${report.name}`
+                                : `إعادة تنشيط ${report.name}`
+                            }
+                            title={report.isEnabled ? "تعطيل" : "تفعيل"}
+                            disabled={toggling}
+                            onClick={() => {
+                              if (report.isEnabled) {
+                                disableMutation.mutate(report.id);
+                              } else {
+                                enableMutation.mutate(report.id);
+                              }
+                            }}
+                          >
+                            {report.isEnabled ? (
+                              <PowerOff aria-hidden="true" />
+                            ) : (
+                              <Power aria-hidden="true" />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            className="icon-btn icon-btn--sm danger"
+                            aria-label={`حذف ${report.name}`}
+                            title="حذف"
+                            onClick={() => setDeleteTarget(report)}
+                          >
+                            <Trash2 aria-hidden="true" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+        </div>
+
+        {!isLoading && rows.length === 0 && (
+          <EmptyState
+            icon={hasFilter ? SearchX : FileText}
+            title={hasFilter ? "لا نتائج مطابقة" : "لا توجد تقارير بعد"}
+            text={
+              hasFilter
+                ? "لم نجد تقريراً يطابق البحث أو فلتر الحالة الحالي. جرّب تعديل الفلاتر."
+                : "أنشئ أول تقرير مخصص لتشغيله وتصدير نتائجه."
+            }
+            action={
+              hasFilter ? (
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowForm(false);
-                    setEditingReport(null);
+                  className="btn btn-ghost btn-sm"
+                  onClick={clearFilters}
+                >
+                  مسح الفلاتر
+                </button>
+              ) : (
+                <a
+                  className="btn btn-primary btn-sm"
+                  href="/reports/new"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    navigate("/reports/new");
                   }}
-                  className="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg font-medium hover:bg-gray-200 transition"
                 >
-                  إلغاء
-                </button>
-                <button
-                  type="submit"
-                  className="bg-primary-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-primary-700 transition"
-                >
-                  حفظ التقرير
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
+                  <Plus aria-hidden="true" />
+                  إنشاء تقرير أول
+                </a>
+              )
+            }
+          />
+        )}
+
+        {!isLoading && rows.length > 0 && (
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            from={from}
+            to={to}
+            onPage={setPage}
+            isFetching={isFetching}
+          />
+        )}
+      </section>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="حذف التقرير"
+        text={
+          deleteTarget
+            ? `سيُحذف تعريف التقرير «${deleteTarget.name}» نهائياً. لا يمكن التراجع عن هذا الإجراء.`
+            : undefined
+        }
+        confirmLabel="حذف التقرير"
+        pending={deleteMutation.isPending}
+        onConfirm={() => {
+          if (deleteTarget) deleteMutation.mutate(deleteTarget.id);
+        }}
+        onClose={() => {
+          if (!deleteMutation.isPending) setDeleteTarget(null);
+        }}
+      />
+    </>
   );
 }

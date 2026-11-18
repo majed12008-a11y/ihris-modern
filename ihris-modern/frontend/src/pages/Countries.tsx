@@ -1,20 +1,17 @@
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/services/api";
 import { useAuthStore } from "@/store/authStore";
 import { toast } from "sonner";
-import {
-  Plus,
-  Pencil,
-  Trash2,
-  Search,
-  ChevronRight,
-  ChevronLeft,
-  AlertTriangle,
-  Globe2,
-  Save,
-  X,
-} from "lucide-react";
+import { Plus, Pencil, Trash2, Globe2, Save, X, SearchX } from "lucide-react";
+import PageHeader from "@/components/ui/PageHeader";
+import SearchInput from "@/components/ui/SearchInput";
+import Pagination from "@/components/ui/Pagination";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { EmptyState, ErrorState, TableSkeleton } from "@/components/ui/StateViews";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useListParams } from "@/hooks/useListParams";
+import { formatDate, formatNumber } from "@/lib/format";
 
 interface CountryRow {
   id: number;
@@ -32,7 +29,7 @@ interface CountryListResponse {
   totalPages: number;
 }
 
-const PAGE_SIZE = 20;
+const PAGE_SIZES = [10, 20, 50];
 
 export default function Countries() {
   const queryClient = useQueryClient();
@@ -40,21 +37,40 @@ export default function Countries() {
   const canWrite = currentUser?.role === "admin" || currentUser?.role === "hr_manager";
   const isAdmin = currentUser?.role === "admin";
 
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
+  const { q, page, limit, setQ, setPage, setLimit } = useListParams({
+    defaultLimit: PAGE_SIZES[1],
+  });
+  const [searchInput, setSearchInput] = useState(q);
+  const debouncedInput = useDebouncedValue(searchInput, 300);
+
   const [editing, setEditing] = useState<CountryRow | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [formData, setFormData] = useState({ name: "", code: "" });
   const [formErrors, setFormErrors] = useState<string[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<CountryRow | null>(null);
 
-  const { data, isLoading, error } = useQuery<CountryListResponse>({
-    queryKey: ["countries", search, page],
+  const dialogTitleId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const firstFieldRef = useRef<HTMLInputElement>(null);
+
+  // إدخال المستخدم ← عنوان URL (بعد توقّف الكتابة)
+  useEffect(() => {
+    const next = debouncedInput.trim();
+    if (next !== q) setQ(next);
+  }, [debouncedInput, q, setQ]);
+
+  // تغيّر خارجي (شريط البحث العلوي أو زر الرجوع) ← حقل البحث
+  useEffect(() => {
+    setSearchInput(q);
+  }, [q]);
+
+  const { data, isLoading, isFetching, error, refetch } = useQuery<CountryListResponse>({
+    queryKey: ["countries", q, page, limit],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (search) params.set("search", search);
+      if (q) params.set("search", q);
       params.set("page", String(page));
-      params.set("limit", String(PAGE_SIZE));
+      params.set("limit", String(limit));
       const res = await api.get(`/countries?${params.toString()}`);
       return res.data;
     },
@@ -73,6 +89,29 @@ export default function Countries() {
     setFormErrors([]);
     setFormOpen(true);
   };
+
+  const closeForm = () => {
+    setFormOpen(false);
+    setEditing(null);
+  };
+
+  // إغلاق نافذة النموذج بـ Escape وإعادة التركيز
+  useEffect(() => {
+    if (!formOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    firstFieldRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setFormOpen(false);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      previous?.focus?.();
+    };
+  }, [formOpen]);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -114,213 +153,303 @@ export default function Countries() {
     },
   });
 
-  if (isLoading) {
-    return <div className="p-6 text-gray-600">جاري تحميل الدول...</div>;
-  }
+  const rows = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 1;
+  const from = total === 0 ? 0 : (page - 1) * limit + 1;
+  const to = Math.min(page * limit, total);
 
-  if (error) {
-    return (
-      <div className="bg-white p-6 rounded-xl shadow border border-red-100">
-        <div className="text-red-600 font-bold mb-2">⚠️ حدث خطأ في تحميل البيانات</div>
-        <p className="text-gray-600 text-sm">
-          {error instanceof Error ? error.message : String(error)}
-        </p>
-      </div>
-    );
-  }
+  const clearSearch = () => {
+    setSearchInput("");
+    setQ("");
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">إدارة الدول</h1>
-          <p className="text-gray-600">بيانات مرجعية — يمكن حذف الدولة فقط إن لم تكن مستخدمة</p>
-        </div>
-        {canWrite && (
-          <button
-            onClick={openCreate}
-            className="bg-primary-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium hover:bg-primary-700 transition"
+    <div className="stack">
+      <PageHeader
+        title="إدارة الدول"
+        subtitle="بيانات مرجعية — يمكن حذف الدولة فقط إن لم تكن مستخدمة"
+        actions={
+          canWrite ? (
+            <button type="button" className="btn btn-primary" onClick={openCreate}>
+              <Plus aria-hidden="true" />
+              دولة جديدة
+            </button>
+          ) : undefined
+        }
+      />
+
+      {error && (
+        <ErrorState
+          message={error instanceof Error ? error.message : String(error)}
+          onRetry={() => refetch()}
+        />
+      )}
+
+      <section className="card">
+        <div className="toolbar">
+          <SearchInput
+            value={searchInput}
+            onChange={setSearchInput}
+            placeholder="البحث بالاسم أو الكود…"
+            label="بحث في الدول"
+          />
+
+          <select
+            className="select"
+            value={limit}
+            onChange={(event) => setLimit(Number(event.target.value))}
+            aria-label="عدد السجلات في الصفحة"
           >
-            <Plus size={18} /> دولة جديدة
-          </button>
-        )}
-      </div>
+            {PAGE_SIZES.map((size) => (
+              <option key={size} value={size}>
+                {size} في الصفحة
+              </option>
+            ))}
+          </select>
 
-      <div className="bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-100">
-          <div className="relative md:w-96">
-            <Search size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="البحث بالاسم أو الكود..."
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              className="w-full pr-10 pl-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-            />
-          </div>
+          {(q || searchInput) && (
+            <button type="button" className="clear-link" onClick={clearSearch}>
+              مسح البحث
+            </button>
+          )}
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-gray-50 border-b border-gray-200">
+        <div className="table-wrap">
+          <table className="data-table data-table--dense">
+            <thead>
               <tr>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">الدولة</th>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">الكود</th>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">الإصدار</th>
-                <th className="px-6 py-3 text-sm font-semibold text-gray-700">الإجراءات</th>
+                <th scope="col">الدولة</th>
+                <th scope="col" className="col-compact">
+                  الكود
+                </th>
+                <th scope="col" className="col-optional">
+                  الإصدار
+                </th>
+                <th scope="col" className="col-optional">
+                  تاريخ الإنشاء
+                </th>
+                <th scope="col">
+                  <span className="sr-only">إجراءات</span>
+                </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
-              {(data?.data || []).map((row) => (
-                <tr key={row.id} className="hover:bg-gray-50 transition">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="bg-primary-50 text-primary-600 p-2 rounded-lg">
-                        <Globe2 size={18} />
+            <tbody>
+              {isLoading && (
+                <TableSkeleton rows={6} cols={5} widths={[190, 60, 50, 100, 0]} />
+              )}
+
+              {!isLoading &&
+                rows.map((row) => (
+                  <tr key={row.id}>
+                    <td>
+                      <div className="cell-person">
+                        <span className="avatar sm a1" aria-hidden="true">
+                          <Globe2 size={15} />
+                        </span>
+                        <span className="person-meta">
+                          <span className="person-name">{row.name}</span>
+                        </span>
                       </div>
-                      <span className="font-medium text-gray-800">{row.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-gray-600 text-sm font-mono">
-                    {row.code || "—"}
-                  </td>
-                  <td className="px-6 py-4 text-gray-600 text-sm">v{row.version}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      {canWrite && (
-                        <button
-                          onClick={() => openEdit(row)}
-                          className="text-primary-600 hover:text-primary-800 p-1"
-                          title="تعديل"
-                        >
-                          <Pencil size={18} />
-                        </button>
-                      )}
-                      {isAdmin && (
-                        <button
-                          onClick={() => setDeleteTarget(row)}
-                          className="text-red-600 hover:text-red-800 p-1"
-                          title="حذف"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="mono col-compact">{row.code || "—"}</td>
+                    <td className="mono col-optional">v{formatNumber(row.version)}</td>
+                    <td className="mono col-optional">{formatDate(row.createdAt)}</td>
+                    <td className="col-actions">
+                      <div className="row-actions">
+                        {canWrite && (
+                          <button
+                            type="button"
+                            className="icon-btn icon-btn--sm"
+                            aria-label={`تعديل ${row.name}`}
+                            title="تعديل"
+                            onClick={() => openEdit(row)}
+                          >
+                            <Pencil aria-hidden="true" />
+                          </button>
+                        )}
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            className="icon-btn icon-btn--sm danger"
+                            aria-label={`حذف ${row.name}`}
+                            title="حذف"
+                            onClick={() => setDeleteTarget(row)}
+                          >
+                            <Trash2 aria-hidden="true" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </div>
 
-        {!data?.data?.length && (
-          <div className="text-center py-12 text-gray-500">لا توجد دول مطابقة</div>
+        {!isLoading && rows.length === 0 && (
+          <EmptyState
+            icon={q ? SearchX : Globe2}
+            title={q ? "لا دول مطابقة" : "لا توجد دول بعد"}
+            text={
+              q
+                ? `لم نجد دولة تطابق «${q}». جرّب جزءاً من الاسم أو الكود أو امسح البحث.`
+                : "أضف أول دولة لتظهر في قوائم الجنسية والدولة والإقامة."
+            }
+            action={
+              q ? (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={clearSearch}
+                >
+                  مسح البحث
+                </button>
+              ) : canWrite ? (
+                <button type="button" className="btn btn-primary btn-sm" onClick={openCreate}>
+                  <Plus aria-hidden="true" />
+                  دولة جديدة
+                </button>
+              ) : undefined
+            }
+          />
         )}
 
-        {data && data.totalPages > 1 && (
-          <div className="p-4 border-t border-gray-100 flex items-center justify-between text-sm">
-            <span className="text-gray-600">
-              صفحة {data.page} من {data.totalPages} — {data.total} دولة
-            </span>
-            <div className="flex gap-2">
-              <button
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="px-3 py-1.5 border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50 flex items-center gap-1"
-              >
-                <ChevronRight size={16} /> السابق
-              </button>
-              <button
-                disabled={page >= data.totalPages}
-                onClick={() => setPage((p) => p + 1)}
-                className="px-3 py-1.5 border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50 flex items-center gap-1"
-              >
-                التالي <ChevronLeft size={16} />
-              </button>
-            </div>
-          </div>
+        {!isLoading && rows.length > 0 && (
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            from={from}
+            to={to}
+            onPage={setPage}
+            isFetching={isFetching}
+          />
         )}
-      </div>
+      </section>
 
       {formOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 m-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-800">
-                {editing ? "تعديل دولة" : "إضافة دولة"}
-              </h2>
+        <div
+          className="dialog-overlay"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeForm();
+          }}
+        >
+          <div
+            className="dialog dialog--wide"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={dialogTitleId}
+            ref={panelRef}
+          >
+            <div className="dialog-head">
+              <span className="dialog-icon" aria-hidden="true">
+                <Globe2 size={18} />
+              </span>
+              <div style={{ minWidth: 0 }}>
+                <h2 className="dialog-title" id={dialogTitleId}>
+                  {editing ? "تعديل دولة" : "إضافة دولة"}
+                </h2>
+                <p className="dialog-text">
+                  {editing
+                    ? editing.name
+                    : "بيانات مرجعية تُستخدم في سجلات الموظفين والمنشآت."}
+                </p>
+              </div>
               <button
-                onClick={() => setFormOpen(false)}
-                className="text-gray-400 hover:text-gray-600"
+                type="button"
+                className="icon-btn"
+                aria-label="إغلاق"
+                onClick={closeForm}
+                style={{ marginInlineStart: "auto", flex: "none" }}
               >
-                <X size={20} />
+                <X size={16} aria-hidden="true" />
               </button>
             </div>
 
-            {formErrors.length > 0 && (
-              <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm space-y-1">
-                {formErrors.map((err, i) => (
-                  <div key={i}>• {err}</div>
-                ))}
-              </div>
-            )}
-
             <form
-              onSubmit={(e) => {
-                e.preventDefault();
+              onSubmit={(event) => {
+                event.preventDefault();
                 setFormErrors([]);
                 if (!formData.name.trim()) {
                   setFormErrors(["اسم الدولة مطلوب"]);
+                  firstFieldRef.current?.focus();
                   return;
                 }
                 saveMutation.mutate();
               }}
-              className="space-y-4"
             >
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  اسم الدولة *
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                  maxLength={100}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  الكود (اختياري)
-                </label>
-                <input
-                  type="text"
-                  value={formData.code}
-                  onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none font-mono"
-                  maxLength={10}
-                />
+              <div className="dialog-body">
+                {formErrors.length > 0 && (
+                  <div
+                    className="alert alert-danger"
+                    role="alert"
+                    style={{ marginBottom: 14 }}
+                  >
+                    <div>
+                      {formErrors.map((message, index) => (
+                        <div key={index}>{message}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="form-stack" style={{ gap: 14 }}>
+                  <div className="field">
+                    <label className="label" htmlFor="country-name">
+                      اسم الدولة <span className="req">*</span>
+                    </label>
+                    <input
+                      id="country-name"
+                      ref={firstFieldRef}
+                      className={`input${formErrors.length > 0 ? " is-invalid" : ""}`}
+                      type="text"
+                      value={formData.name}
+                      onChange={(event) =>
+                        setFormData({ ...formData, name: event.target.value })
+                      }
+                      maxLength={100}
+                      required
+                      aria-invalid={formErrors.length > 0 ? "true" : undefined}
+                      aria-describedby={formErrors.length > 0 ? "country-name-err" : undefined}
+                    />
+                    {formErrors.length > 0 && (
+                      <span className="err" id="country-name-err">
+                        {formErrors[0]}
+                      </span>
+                    )}
+                  </div>
+                  <div className="field">
+                    <label className="label" htmlFor="country-code">
+                      الكود (اختياري)
+                    </label>
+                    <input
+                      id="country-code"
+                      className="input mono"
+                      type="text"
+                      value={formData.code}
+                      onChange={(event) =>
+                        setFormData({ ...formData, code: event.target.value })
+                      }
+                      maxLength={10}
+                      spellCheck={false}
+                    />
+                    <span className="hint">رمز قصير للدولة، مثل: YE أو SA.</span>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex gap-3 pt-4 border-t border-gray-100">
-                <button
-                  type="submit"
-                  disabled={saveMutation.isPending}
-                  className="bg-primary-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-primary-700 disabled:opacity-60 flex items-center gap-2"
-                >
-                  <Save size={18} />
-                  {saveMutation.isPending ? "جاري الحفظ..." : "حفظ"}
+              <div className="dialog-foot">
+                <button type="button" className="btn btn-ghost" onClick={closeForm}>
+                  إلغاء
                 </button>
                 <button
-                  type="button"
-                  onClick={() => setFormOpen(false)}
-                  className="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg font-medium hover:bg-gray-200"
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={saveMutation.isPending}
                 >
-                  إلغاء
+                  <Save aria-hidden="true" />
+                  {saveMutation.isPending ? "جارٍ الحفظ…" : "حفظ"}
                 </button>
               </div>
             </form>
@@ -328,41 +457,23 @@ export default function Countries() {
         </div>
       )}
 
-      {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 m-4">
-            <div className="flex items-start gap-3 mb-4">
-              <div className="bg-red-100 text-red-600 p-2 rounded-full">
-                <AlertTriangle size={22} />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-gray-800">حذف الدولة</h2>
-                <p className="text-gray-600 text-sm mt-1">
-                  سيتم حذف <span className="font-bold">{deleteTarget.name}</span> نهائياً.
-                  لا يمكن الحذف إذا كانت مستخدمة في أشخاص أو منشآت أو محافظات أو تدريب.
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-3 pt-4 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={() => setDeleteTarget(null)}
-                className="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg font-medium hover:bg-gray-200"
-              >
-                إلغاء
-              </button>
-              <button
-                type="button"
-                disabled={deleteMutation.isPending}
-                onClick={() => deleteMutation.mutate(deleteTarget)}
-                className="bg-red-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-red-700 disabled:opacity-60"
-              >
-                {deleteMutation.isPending ? "جاري الحذف..." : "تأكيد الحذف"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="حذف الدولة"
+        confirmLabel="تأكيد الحذف"
+        pending={deleteMutation.isPending}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (deleteTarget) deleteMutation.mutate(deleteTarget);
+        }}
+        text={
+          <>
+            سيتم حذف{" "}
+            <span style={{ fontWeight: 600 }}>{deleteTarget?.name}</span> نهائياً. لا
+            يمكن الحذف إذا كانت مستخدمة في أشخاص أو منشآت أو محافظات أو تدريب.
+          </>
+        }
+      />
     </div>
   );
 }
